@@ -1,0 +1,7 @@
+[package]
+name = "lox"
+version = "0.1.0"
+authors = ["Sambe_4e <f_editor@aol.jp>"]
+edition = "2018"
+
+[dependencies]
