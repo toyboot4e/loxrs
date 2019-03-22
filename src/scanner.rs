@@ -8,8 +8,8 @@ mod char_ext {
         c >= '0' && c <= '9'
     }
 
-    /// Returns true if it may be a beginning of an identifier.
-    /// It means true if it's an alphabet or under score.
+    /// Returns true if it may be a beginning of an identifier
+    /// i.e. an alphabet or an under score.
     pub fn is_alpha(c: char) -> bool {
         (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'
     }
@@ -18,6 +18,7 @@ mod char_ext {
         is_digit(c) || is_alpha(c)
     }
 
+    /// Returns true if it's a char to be discarded.
     pub fn is_whitespace(c: char) -> bool {
         match c {
             ' ' | '\r' | '\t' | '\n' => true,
@@ -100,7 +101,7 @@ impl<'a> Scanner<'a> {
         return next;
     }
 
-    /// Returns if advanced.
+    /// Returns true if it advanced.
     fn advance_if_match(&mut self, expected: char) -> bool {
         if self.peek() == Some(&expected) {
             self.advance();
@@ -136,7 +137,6 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    /// The entry point of the recursive scanning.
     /// Returns None for tokens to be discarded.
     fn scan_token(&mut self) -> Option<Result<Token, ScannerError>> {
         use Token::*;
@@ -184,7 +184,7 @@ impl<'a> Scanner<'a> {
         return Some(_result);
     }
 
-    // TODO: skip block comment
+    // TODO: skipping block comment
     fn scan_operator(&mut self, expected: char, if_true: Token, if_false: Token) -> Token {
         if self.peek() == Some(&expected) {
             self.advance();
@@ -198,11 +198,8 @@ impl<'a> Scanner<'a> {
         loop {
             match self.advance() {
                 None => return Err(ScannerError::UnterminatedString(self.position)),
-                Some('\n') => {
-                    self.position.inc_line();
-                }
                 Some('"') => {
-                    // removing both " characters
+                    // return removing both " characters
                     return Ok(Token::String(
                         self.lexeme[1..self.lexeme.len() - 1].to_string(),
                     ));
