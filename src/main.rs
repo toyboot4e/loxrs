@@ -10,7 +10,7 @@ fn main() -> io::Result<()> {
             lox::run_repl();
         }
         x if x >= 2 => {
-            lox::run_file(&args[2]);
+            lox::run_file(&args[1]);
         }
         _ => {
             panic!("");

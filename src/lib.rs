@@ -1,3 +1,5 @@
+extern crate itertools;
+
 mod scanner;
 mod token;
 pub use scanner::Scanner;
@@ -33,7 +35,7 @@ pub fn run_repl() {
         io::stdin()
             .read_line(&mut line)
             .expect("error when read_line");
-        match line.trim_right() {
+        match line.trim_end() {
             "q" | "quit" => {
                 break;
             }

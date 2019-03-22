@@ -1,24 +1,47 @@
-use crate::token::{SourcePosition, SourceToken, Token};
-use std::error;
-use std::fmt;
-use std::iter::Peekable;
+use itertools::{multipeek, MultiPeek};
+
+use crate::token::{Token, SourcePosition, SourceToken};
 use std::str::Chars;
+
+mod char_ext {
+    pub fn is_digit(c: char) -> bool {
+        c >= '0' && c <= '9'
+    }
+
+    /// Returns true if it may be a beginning of an identifier.
+    /// It means true if it's an alphabet or under score.
+    pub fn is_alpha(c: char) -> bool {
+        (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'
+    }
+
+    pub fn is_alphanumeric(c: char) -> bool {
+        is_digit(c) || is_alpha(c)
+    }
+
+    pub fn is_whitespace(c: char) -> bool {
+        match c {
+            ' ' | '\r' | '\t' | '\n' => true,
+            _ => false,
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum ScannerError {
     UnterminatedString(SourcePosition),
+    UnexpectedCharacter(char, SourcePosition),
 }
 
-pub struct Scanner<'s> {
-    source: Peekable<Chars<'s>>,
+pub struct Scanner<'a> {
+    source: MultiPeek<Chars<'a>>,
     lexeme: String,
     position: SourcePosition,
 }
 
-impl<'s> Scanner<'s> {
-    pub fn new(src: &'s str) -> Self {
+impl<'a> Scanner<'a> {
+    pub fn new(src: &'a str) -> Self {
         Self {
-            source: src.chars().peekable(),
+            source: multipeek(src.chars()),
             lexeme: String::new(),
             position: SourcePosition::initial(),
         }
@@ -27,9 +50,10 @@ impl<'s> Scanner<'s> {
     pub fn scan(&mut self) -> (Vec<SourceToken>, Vec<ScannerError>) {
         let mut tokens = Vec::<SourceToken>::new();
         let mut errors = Vec::<ScannerError>::new();
+
         loop {
-            // None is just discarded
             let position = self.position;
+            // None is just discarded
             if let Some(result) = self.scan_token() {
                 match result {
                     Ok(Token::Eof) => {
@@ -52,14 +76,16 @@ impl<'s> Scanner<'s> {
         SourceToken::new(token, position, self.lexeme.clone())
     }
 
-    fn is_at_end(&mut self) -> bool {
-        self.source.peek() == None
-    }
-
     fn peek(&mut self) -> Option<&char> {
+        self.source.reset_peek();
         self.source.peek()
     }
 
+    fn peek_next(&mut self) -> Option<&char> {
+        self.source.peek()
+    }
+
+    /// Advances the char-based iterator, incrementing the current position.
     fn advance(&mut self) -> Option<char> {
         let next = self.source.next();
         if let Some(c) = next {
@@ -74,6 +100,7 @@ impl<'s> Scanner<'s> {
         return next;
     }
 
+    /// Returns if advanced.
     fn advance_if_match(&mut self, expected: char) -> bool {
         if self.peek() == Some(&expected) {
             self.advance();
@@ -83,29 +110,43 @@ impl<'s> Scanner<'s> {
         }
     }
 
-    fn advance_until(&mut self, c: char) {
-        match self.peek() {
-            Some(_c) if _c == &c => {
-                return;
+    /// Returns hit EoF or not.
+    fn advance_until_match(&mut self, expected: char) -> bool {
+        loop {
+            match self.peek() {
+                Some(&c) if c == expected => {
+                    return false;
+                }
+                None => {
+                    return true;
+                }
+                _ => {
+                    self.advance();
+                }
             }
-            None => {
-                return;
-            }
-            _ => {
-                self.advance();
-            }
-        };
+        }
     }
 
-    /// Entry point of recursive scanning.
+    fn advance_while(&mut self, conditional: &Fn(char) -> bool) {
+        while let Some(&c) = self.peek() {
+            if !conditional(c) {
+                return;
+            }
+            self.advance();
+        }
+    }
+
+    /// The entry point of the recursive scanning.
     /// Returns None for tokens to be discarded.
     fn scan_token(&mut self) -> Option<Result<Token, ScannerError>> {
         use Token::*;
         self.lexeme.clear();
+
         let c = match self.advance() {
             None => return Some(Ok(Eof)),
             Some(x) => x,
         };
+
         let _result = match c {
             '(' => Ok(LeftParen),
             ')' => Ok(RightParen),
@@ -123,20 +164,27 @@ impl<'s> Scanner<'s> {
             '>' => Ok(self.scan_operator('=', GreaterEqual, Greater)),
             '/' => {
                 if self.advance_if_match('/') {
-                    self.advance_until('\n');
-                    return None;
+                    if self.advance_until_match('\n') {
+                        // Hit EoF
+                        return Some(Ok(Eof));
+                    } else {
+                        return None;
+                    }
                 } else {
                     Ok(Slash)
                 }
             }
-            ' ' | '\r' | '\t' => return None,
+            ' ' | '\r' | '\t' | '\n' => return None,
             '"' => self.scan_string(),
-            _ => return None,
+            c if char_ext::is_digit(c) => self.scan_number(),
+            c if char_ext::is_alpha(c) => self.scan_identifier(),
+            _ => return Some(Err(ScannerError::UnexpectedCharacter(c, self.position))),
         };
 
         return Some(_result);
     }
 
+    // TODO: skip block comment
     fn scan_operator(&mut self, expected: char, if_true: Token, if_false: Token) -> Token {
         if self.peek() == Some(&expected) {
             self.advance();
@@ -150,16 +198,60 @@ impl<'s> Scanner<'s> {
         loop {
             match self.advance() {
                 None => return Err(ScannerError::UnterminatedString(self.position)),
+                Some('\n') => {
+                    self.position.inc_line();
+                }
                 Some('"') => {
-                    // remove both " characters
-                    let len = self.lexeme.len() - 2;
+                    // removing both " characters
                     return Ok(Token::String(
-                        // self.lexeme.chars().skip(1).take(len).collect(),
-                        self.lexeme[1..len].to_string(),
+                        self.lexeme[1..self.lexeme.len() - 1].to_string(),
                     ));
                 }
                 _ => {}
             };
         }
+    }
+
+    // disabled: a leading or trailing decimal point
+    // TODO: enabling comma deliminated numbers
+    fn scan_number(&mut self) -> Result<Token, ScannerError> {
+        self.advance_while(&char_ext::is_digit);
+        if self.peek() == Some(&'.') {
+            match self.peek_next() {
+                Some(&c) if char_ext::is_digit(c) => {
+                    self.advance();
+                    self.advance_while(&char_ext::is_digit);
+                }
+                _ => {}
+            }
+        }
+
+        let n = self.lexeme.parse().expect(&format!("scan_number parsing error for {}", self.lexeme));
+        return Ok(Token::Number(n));
+    }
+
+    /// Scans an identifier or a reserved word.
+    fn scan_identifier(&mut self) -> Result<Token, ScannerError> {
+        self.advance_while(&char_ext::is_alphanumeric);
+        use Token::*;
+        Ok(match self.lexeme.as_ref() {
+            "and" => And,
+            "class" => Class,
+            "else" => Else,
+            "false" => False,
+            "for" => For,
+            "fun" => Fun,
+            "if" => If,
+            "nil" => Nil,
+            "or" => Or,
+            "print" => Print,
+            "return" => Return,
+            "super" => Super,
+            "this" => This,
+            "true" => True,
+            "var" => Var,
+            "while" => While,
+            name => Identifier(name.to_string()),
+        })
     }
 }

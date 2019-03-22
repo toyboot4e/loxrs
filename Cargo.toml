@@ -1,7 +1,8 @@
 [package]
 name = "lox"
 version = "0.1.0"
-authors = ["Sambe_4e <f_editor@aol.jp>"]
+authors = ["toyboot4e <toyboot4e@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+itertools = "0.8"

@@ -1,5 +1,3 @@
-use std::fmt;
-
 #[derive(Clone, Debug, PartialEq)]
 pub enum Token {
     // single character tokens
@@ -97,6 +95,7 @@ impl SourceToken {
         Self {
             token: token,
             position: position,
+            // Required?
             lexeme: lexeme,
         }
     }
