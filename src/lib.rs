@@ -1,5 +1,7 @@
+// TODO: not using extern crate?
 extern crate itertools;
 
+mod abs;
 mod scanner;
 mod token;
 pub use scanner::Scanner;
@@ -30,7 +32,7 @@ pub fn run_repl() {
     let mut line = String::new();
     loop {
         print!("{}", prompt_str);
-        io::stdout().flush().expect("error when flush stdout");
+        io::stdout().flush().expect("error when flushing stdout");
         line.clear();
         io::stdin()
             .read_line(&mut line)

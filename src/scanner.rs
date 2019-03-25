@@ -1,6 +1,6 @@
 use itertools::{multipeek, MultiPeek};
 
-use crate::token::{Token, SourcePosition, SourceToken};
+use crate::token::{SourcePosition, SourceToken, Token};
 use std::str::Chars;
 
 mod char_ext {
@@ -223,7 +223,10 @@ impl<'a> Scanner<'a> {
             }
         }
 
-        let n = self.lexeme.parse().expect(&format!("scan_number parsing error for {}", self.lexeme));
+        let n = self
+            .lexeme
+            .parse()
+            .expect(&format!("scan_number parsing error for {}", self.lexeme));
         return Ok(Token::Number(n));
     }
 

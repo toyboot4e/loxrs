@@ -9,7 +9,7 @@ fn main() -> io::Result<()> {
         0 | 1 => {
             lox::run_repl();
         }
-        x if x >= 2 => {
+        n if n >= 2 => {
             lox::run_file(&args[1]);
         }
         _ => {
