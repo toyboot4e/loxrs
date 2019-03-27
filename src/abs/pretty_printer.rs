@@ -26,7 +26,7 @@ impl PrettyPrintHelper for UnaryOper {
     fn pretty_print_help(&self) -> &str {
         use UnaryOper::*;
         match *self {
-            Bang => "!",
+            Not => "!",
             Minus => "-",
         }
     }
@@ -38,8 +38,8 @@ impl PrettyPrintHelper for BinaryOper {
         match *self {
             Minus => "-",
             Plus => "+",
-            Slash => "/",
-            Star => "*",
+            Mul => "*",
+            Div => "/",
             Equal => "=",
             NotEqual => "!=",
             Less => "<",
@@ -126,9 +126,9 @@ mod test {
         println!(
             "{}",
             Expr::binary(
-                Expr::unary(UnaryOper::Minus, Expr::literal(LiteralArgs::Number(123.0))),
-                BinaryOper::Minus,
-                Expr::group(Expr::literal(LiteralArgs::Number(45.67))),
+                Expr::unary(UnaryOper::Minus, Expr::literal(123.0.into())),
+                BinaryOper::Mul,
+                Expr::group(Expr::literal(45.67.into())),
             )
             .pretty_print()
         );

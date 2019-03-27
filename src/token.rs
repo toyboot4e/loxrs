@@ -10,6 +10,7 @@ pub enum Token {
     Minus,
     Plus,
     Semicolon,
+    // slash / star vs mul / div
     Slash,
     Star,
 
@@ -85,9 +86,9 @@ impl SourcePosition {
 /// [`Token`] with context in source code.
 #[derive(Debug)]
 pub struct SourceToken {
-    token: Token,
-    position: SourcePosition,
-    lexeme: String,
+    pub token: Token,
+    pub position: SourcePosition,
+    pub lexeme: String,
 }
 
 impl SourceToken {
