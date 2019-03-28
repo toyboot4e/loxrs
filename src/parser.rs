@@ -17,6 +17,7 @@ use std::iter::Peekable;
 #[derive(Debug, Clone)]
 pub enum ParseError {
     Temp,
+    UnexpectedEof,
 }
 type Result = std::result::Result<Expr, ParseError>;
 
@@ -122,7 +123,7 @@ where
     fn parse_primary(&mut self) -> Result {
         let token = match self.advance() {
             Some(s_token) => &s_token.token,
-            None => return Err(ParseError::Temp),
+            None => return Err(ParseError::UnexpectedEof),
         };
         use Token::*;
         Ok(match *token {
@@ -141,5 +142,21 @@ where
     /// To be called after consuming "("
     fn parse_group(&mut self) -> Result {
         return Err(ParseError::Temp);
+    }
+
+    /// Enters panic mode and tries to go to next statement (though it's not so accurate).
+    /// It goes to a next semicolon, which may not be the beginning of the next statement.
+    fn synchronize(&mut self) {
+        while let Some(s_token) = self.peek() {
+            use Token::*;
+            match s_token.token {
+                Class | Fun | Var | If | For | While | Print | Return => return,
+                _ => {}
+            };
+            self.advance();
+            if s_token.token == Semicolon {
+                return;
+            }
+        }
     }
 }
