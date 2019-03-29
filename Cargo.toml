@@ -1,8 +1,9 @@
 [package]
-name = "lox"
+name = "loxrs"
 version = "0.1.0"
 authors = ["toyboot4e <toyboot4e@gmail.com>"]
 edition = "2018"
 
 [dependencies]
 itertools = "0.8"
+# lazy_static = "1.3.0"
