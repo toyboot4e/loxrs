@@ -2,21 +2,9 @@ use crate::abs::expr::*;
 use crate::token::{SourcePosition, SourceToken, Token};
 use std::iter::Peekable;
 
-// Non generic Parser:
-// pub struct Parser<'a> {
-//     tokens: Peekable<slice::Iter<'a, SourceToken>>,
-// }
-// impl<'a> Parser<'a> {
-//     pub fn new(tokens: &'a [SourceToken]) -> Self {
-//         Parser {
-//             tokens: tokens.iter().peekable(),
-//         }
-//     }
-// }
-
 #[derive(Debug, Clone)]
 pub enum ParseError {
-    Temp,
+    Temp, // Delete this with suitable error
     UnexpectedEof,
 }
 type Result = std::result::Result<Expr, ParseError>;
@@ -29,6 +17,8 @@ where
 }
 
 impl<'a> Parser<'a, std::slice::Iter<'a, SourceToken>> {
+    // TODO: more abstarct constructor
+    // (maybe allowing implicit type conversion or like that)
     pub fn new(tokens: &'a [SourceToken]) -> Self {
         Parser {
             tokens: tokens.iter().peekable(),
@@ -148,15 +138,40 @@ where
     /// It goes to a next semicolon, which may not be the beginning of the next statement.
     fn synchronize(&mut self) {
         while let Some(s_token) = self.peek() {
-            use Token::*;
-            match s_token.token {
-                Class | Fun | Var | If | For | While | Print | Return => return,
-                _ => {}
-            };
-            self.advance();
-            if s_token.token == Semicolon {
-                return;
+            let result = SyncPeekChecker::check_token(&s_token.token);
+            if result.needs_advance {
+                self.advance();
             }
+            if result.ends {
+                break;
+            }
+        }
+    }
+}
+
+struct SyncPeekChecker {
+    pub needs_advance: bool,
+    pub ends: bool,
+}
+
+use std::borrow::Borrow;
+impl SyncPeekChecker {
+    // TODO: proper Borrow<Token> or just use &Token
+    pub fn check_token<T: Borrow<Token>>(token: T) -> Self {
+        use Token::*;
+        match token.borrow() {
+            Class | Fun | Var | If | For | While | Print | Return => Self {
+                needs_advance: false,
+                ends: true,
+            },
+            Semicolon => Self {
+                needs_advance: true,
+                ends: true,
+            },
+            _ => Self {
+                needs_advance: true,
+                ends: false,
+            },
         }
     }
 }
