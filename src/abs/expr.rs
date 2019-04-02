@@ -3,7 +3,8 @@ use std::convert::From;
 // TODO: benchmark lazy static vs match
 // TODO: combining oper and token or not
 
-// specific subtypes are always need for the pretty printer.
+// specific subtypes are always needed for the pretty printer.
+#[derive(Clone, Debug, PartialEq)]
 pub enum Expr {
     Literal(LiteralArgs),
     Unary(Box<UnaryArgs>),
@@ -43,6 +44,10 @@ impl Expr {
     pub fn group(expr: Expr) -> Expr {
         Expr::Grouping(Box::new(GroupingArgs { expr: expr }))
     }
+
+    pub fn evaluate(&mut self) {
+        //
+    }
 }
 
 impl From<LiteralArgs> for Expr {
@@ -51,6 +56,7 @@ impl From<LiteralArgs> for Expr {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub enum LiteralArgs {
     Nil,
     Bool(bool),
@@ -58,6 +64,21 @@ pub enum LiteralArgs {
     Number(f64),
 }
 
+impl LiteralArgs {
+    pub fn from_token(t: &Token) -> Option<LiteralArgs> {
+        use Token::*;
+        Some(match t {
+            Nil => LiteralArgs::Nil,
+            True => LiteralArgs::Bool(true),
+            False => LiteralArgs::Bool(false),
+            String(ref s) => LiteralArgs::StringL(s.clone()),
+            Number(n) => LiteralArgs::Number(n.clone()),
+            _ => return None,
+        })
+    }
+}
+
+// They are convenient for writing tests.
 impl From<f64> for LiteralArgs {
     fn from(item: f64) -> Self {
         LiteralArgs::Number(item)
@@ -76,6 +97,7 @@ impl From<bool> for LiteralArgs {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct UnaryArgs {
     pub oper: UnaryOper,
     pub expr: Expr,
@@ -98,13 +120,14 @@ impl From<Token> for Option<UnaryOper> {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct BinaryArgs {
     pub left: Expr,
     pub oper: BinaryOper,
     pub right: Expr,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum BinaryOper {
     Minus,
     Plus,
@@ -137,13 +160,14 @@ impl From<Token> for Option<BinaryOper> {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct LogicArgs {
     pub left: Expr,
     pub oper: LogicOper,
     pub right: Expr,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum LogicOper {
     Or,
     And,
@@ -160,6 +184,7 @@ impl From<Token> for Option<LogicOper> {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct GroupingArgs {
     pub expr: Expr,
 }

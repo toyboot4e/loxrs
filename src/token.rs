@@ -84,18 +84,19 @@ impl SourcePosition {
 }
 
 /// [`Token`] with context in source code.
+/// It's often referred to as `s_token`.
 #[derive(Debug)]
 pub struct SourceToken {
     pub token: Token,
-    pub position: SourcePosition,
+    pub pos: SourcePosition,
     pub lexeme: String,
 }
 
 impl SourceToken {
-    pub fn new(token: Token, position: SourcePosition, lexeme: String) -> Self {
+    pub fn new(token: Token, pos: SourcePosition, lexeme: String) -> Self {
         Self {
             token: token,
-            position: position,
+            pos: pos,
             // Required?
             lexeme: lexeme,
         }

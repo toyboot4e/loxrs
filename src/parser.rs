@@ -1,13 +1,46 @@
 use crate::abs::expr::*;
+use crate::abs::stmt::*;
 use crate::token::{SourcePosition, SourceToken, Token};
 use std::iter::Peekable;
 
 #[derive(Debug, Clone)]
 pub enum ParseError {
-    Temp, // Delete this with suitable error
     UnexpectedEof,
+    UnexpectedToken(UnexpectedTokenArgs),
 }
-type Result = std::result::Result<Expr, ParseError>;
+
+impl ParseError {
+    pub fn unexpected(found: &SourceToken, expected: &[Token]) -> Self {
+        ParseError::UnexpectedToken(UnexpectedTokenArgs::from_s_token(found, expected))
+    }
+    pub fn not_beginning_of_stmt(found: &SourceToken) -> Self {
+        use Token::*;
+        Self::unexpected(found, &[Print])
+    }
+    pub fn eof() -> Self {
+        ParseError::UnexpectedEof
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct UnexpectedTokenArgs {
+    pos: SourcePosition,
+    expected: Vec<Token>,
+    found: Token,
+}
+
+impl UnexpectedTokenArgs {
+    // TODO: more generic interface
+    pub fn from_s_token(s_token: &SourceToken, expected: &[Token]) -> Self {
+        UnexpectedTokenArgs {
+            pos: s_token.pos,
+            expected: expected.iter().cloned().collect(),
+            found: s_token.token.clone(),
+        }
+    }
+}
+
+type Result<T> = std::result::Result<T, ParseError>;
 
 pub struct Parser<'a, I>
 where
@@ -26,6 +59,9 @@ impl<'a> Parser<'a, std::slice::Iter<'a, SourceToken>> {
     }
 }
 
+// Impl block of helper functions
+// TODO: which to return: SourceToken or Token
+// TODO: Token vs &Token
 impl<'a, I> Parser<'a, I>
 where
     I: Iterator<Item = &'a SourceToken> + Sized,
@@ -34,104 +70,195 @@ where
         self.tokens.peek()
     }
 
-    /// True if any matches to the next token.
-    fn advance_and_match(&mut self, tokens: &[Token]) -> Option<Token> {
-        let next = match self.advance() {
-            None => return None,
-            Some(source_token) => &source_token.token,
-        };
-        return tokens.iter().find(|t| t == &next).map(|t| t.clone());
-    }
-
     fn advance(&mut self) -> Option<&SourceToken> {
         self.tokens.next()
     }
 
-    pub fn parse_expr(&mut self) -> Result {
-        self.parse_equality()
+    // TODO: benchmark performance between self.try_peek()?; and match self.peek() { .. }
+    fn try_peek(&mut self) -> Result<&&SourceToken> {
+        self.peek().ok_or(ParseError::eof())
     }
 
-    /// Right recursive parsing
-    // TODO: #[inline], meta programming, etc.
+    fn try_advance(&mut self) -> Result<&SourceToken> {
+        self.advance().ok_or(ParseError::eof())
+    }
+
+    fn _find(s_token: &SourceToken, expected: &[Token]) -> Option<Token> {
+        expected.iter().cloned().find(|t| t == &s_token.token)
+    }
+
+    fn _any(s_token: &SourceToken, expected: &[Token]) -> bool {
+        expected.iter().any(|t| t == &s_token.token)
+    }
+
+    fn advance_if_match(&mut self, expected: &[Token]) -> Option<&SourceToken> {
+        if Self::_any(self.peek()?, expected) {
+            self.advance()
+        } else {
+            None
+        }
+    }
+
+    fn try_match(s_token: &SourceToken, expected: &[Token]) -> Result<Token> {
+        Self::_find(s_token, expected).ok_or(ParseError::unexpected(s_token, expected))
+    }
+
+    fn try_peek_match(&mut self, expected: &[Token]) -> Result<Token> {
+        self.try_peek()
+            .and_then(|s_token| Self::try_match(s_token, expected))
+    }
+
+    /// True if any matches to the next token.
+    fn try_advance_match(&mut self, expected: &[Token]) -> Result<Token> {
+        self.try_advance()
+            .and_then(|s_token| Self::try_match(s_token, expected))
+    }
+
+    fn try_advance_if_match(&mut self, expected: &[Token]) -> Result<Token> {
+        let s_token = self.try_peek()?;
+        if let Some(token) = Self::_find(s_token, expected) {
+            self.advance();
+            Ok(token)
+        } else {
+            Err(ParseError::unexpected(s_token, expected))
+        }
+    }
+}
+
+// Impl block of parse functions
+impl<'a, I> Parser<'a, I>
+where
+    I: Iterator<Item = &'a SourceToken> + Sized,
+{
+    // program   → statement* EOF ;
+    pub fn parse(&mut self) -> (Vec<Stmt>, Vec<ParseError>) {
+        let mut stmts = Vec::<Stmt>::new();
+        let mut errors = Vec::<ParseError>::new();
+
+        while let Some(s_token) = self.parse_stmt() {
+            match s_token {
+                Ok(stmt) => stmts.push(stmt),
+                Err(why) => errors.push(why),
+            }
+        }
+
+        return (stmts, errors);
+    }
+
+    /// Returns some result until finding EoF.
+    /// Sub rules don't consume an unexpected token.
+    pub fn parse_stmt(&mut self) -> Option<Result<Stmt>> {
+        use Token::*;
+        Some(match &self.advance()?.token {
+            Print => self.stmt_print(),
+            _ => self.stmt_expr(),
+        })
+    }
+
+    fn stmt_print(&mut self) -> Result<Stmt> {
+        let expr = self.parse_expr()?;
+        self.try_advance_if_match(&[Token::Semicolon])?;
+        Ok(Stmt::print(format!("{:?}", expr)))
+    }
+
+    /// Sub rules don't consume an unexpected token.
+    fn stmt_expr(&mut self) -> Result<Stmt> {
+        let expr = self.parse_expr()?;
+        Ok(Stmt::expr(expr))
+    }
+
+    pub fn parse_expr(&mut self) -> Result<Expr> {
+        self.expr_equality()
+    }
+
+    /// Right recursive parsing: Expr (Oper Expr)*
+    /// Expr is created by sub_rule, which may return error.
+    /// Doesn't consume unexpected token.
+    // TODO: #[inline], macro, etc for performance.
     fn rrp<Oper>(
         &mut self,
-        sub_rule: &Fn(&mut Self) -> Result,
+        sub_rule: &Fn(&mut Self) -> Result<Expr>,
         delimiters: &[Token],
         folder: &Fn(Expr, Oper, Expr) -> Expr,
-    ) -> Result
+    ) -> Result<Expr>
     where
-        Token: Into<Option<Oper>>, // where
-                                   //     Token: Into<Option<Oper>>
+        Token: Into<Option<Oper>>,
     {
         let mut expr = sub_rule(self)?;
-        while let Some(token) = self.advance_and_match(delimiters) {
+        // TODO: advance_if_match and panic mode
+        // TODO: Oper: From<&Token>
+        while let Some(token) = self.advance_if_match(delimiters).map(|s| s.token.clone()) {
             let right = sub_rule(self)?;
-            expr = folder(expr, token.into().unwrap(), right);
+            let oper = token.into().unwrap();
+            expr = folder(expr, oper, right);
         }
         return Ok(expr);
     }
 
     /// equality → comparison ( ( "!=" | "==" ) comparison )* ;
-    fn parse_equality(&mut self) -> Result {
+    fn expr_equality(&mut self) -> Result<Expr> {
         use Token::*;
         self.rrp::<BinaryOper>(
-            &Self::parse_comparison,
+            &Self::expr_comparison,
             &[EqualEqual, BangEqual],
             &Expr::binary,
         )
     }
 
     /// comparison → addition ( ( ">" | ">=" | "<" | "<=" ) addition )* ;
-    fn parse_comparison(&mut self) -> Result {
+    fn expr_comparison(&mut self) -> Result<Expr> {
         use Token::*;
         self.rrp(
-            &Self::parse_addition,
+            &Self::expr_addition,
             &[Greater, GreaterEqual, Less, LessEqual],
             &Expr::binary,
         )
     }
 
     /// addition → multiplication ( ( "-" | "+" ) multiplication )* ;
-    fn parse_addition(&mut self) -> Result {
+    fn expr_addition(&mut self) -> Result<Expr> {
         use Token::*;
-        self.rrp(&Self::parse_multiplication, &[Plus, Minus], &Expr::binary)
+        self.rrp(&Self::expr_multiplication, &[Plus, Minus], &Expr::binary)
     }
 
     /// multiplication → unary ( ( "/" | "*" ) unary )* ;
-    fn parse_multiplication(&mut self) -> Result {
+    fn expr_multiplication(&mut self) -> Result<Expr> {
         use Token::*;
-        self.rrp(&Self::parse_unary, &[Slash, Star], &Expr::binary)
+        self.rrp(&Self::expr_unary, &[Slash, Star], &Expr::binary)
     }
 
     /// unary   → ( "!" | "-" ) unary | primary ;
-    fn parse_unary(&mut self) -> Result {
+    fn expr_unary(&mut self) -> Result<Expr> {
         use Token::*;
-        self.rrp(&Self::parse_primary, &[Bang, Minus], &Expr::binary)
+        self.rrp(&Self::expr_primary, &[Bang, Minus], &Expr::binary)
     }
 
-    /// primary → NUMBER | STRING | "false" | "true" | "nil" | "(" expression ")" ;
-    fn parse_primary(&mut self) -> Result {
-        let token = match self.advance() {
-            Some(s_token) => &s_token.token,
-            None => return Err(ParseError::UnexpectedEof),
-        };
-        use Token::*;
-        Ok(match *token {
-            // literal or grouping
-            Number(n) => LiteralArgs::Number(n),
-            String(ref s) => LiteralArgs::StringL(s.clone()),
-            False => LiteralArgs::Bool(false),
-            True => LiteralArgs::Bool(true),
-            Nil => LiteralArgs::Nil,
-            _ => return self.parse_group(),
+    /// primary → literal | group ;
+    /// literal → NUMBER | STRING | "false" | "true" | "nil" ;
+    /// group → "(" expr ")"
+    fn expr_primary(&mut self) -> Result<Expr> {
+        // TODO: use match only once: the following line means opt.ok_or()?;
+        let s_token = self.try_advance()?;
+        if let Some(args) = LiteralArgs::from_token(&s_token.token) {
+            Ok(args.into())
+        } else if s_token.token == Token::LeftParen {
+            return self.expr_group();
+        } else {
+            use Token::*;
+            Err(ParseError::unexpected(
+                s_token,
+                &[Number(0.0), String("".into()), False, True, Nil, LeftParen],
+            ))
         }
-        .into())
     }
 
-    /// "(" expression ")"
+    /// group → "(" expression ")"
     /// To be called after consuming "("
-    fn parse_group(&mut self) -> Result {
-        return Err(ParseError::Temp);
+    fn expr_group(&mut self) -> Result<Expr> {
+        // TODO: synchronize
+        let expr = self.parse_expr()?;
+        self.try_advance_if_match(&[Token::RightParen])?;
+        Ok(expr)
     }
 
     /// Enters panic mode and tries to go to next statement (though it's not so accurate).

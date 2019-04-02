@@ -1,29 +1,47 @@
+//! loxrs is a Lox implementation written in Rust.
+//! It's just a hobby project and not so sopihsticated.
+
 // TODO: not using extern crate?
 extern crate itertools;
 
 mod abs;
+mod parser;
 mod scanner;
 mod token;
-pub use scanner::Scanner;
-pub use token::Token;
 
-use std::format; // format!
-use std::fs::File; // open
-use std::io::{self, Read, Write}; // read_to_string(), flush()
+use abs::stmt::Stmt;
+use parser::Parser;
+use scanner::Scanner;
+
+use std::fs::{self, File};
+use std::io::{self, Write}; // flush()
 
 pub fn run_file(path: &str) {
-    let mut file = File::open(path).expect(&format!("not found file: {}", path));
-    let mut source = String::new();
-    file.read_to_string(&mut source)
-        .expect("could not read file to string");
-    let mut scanner = Scanner::new(&source);
-    let (tokens, errors) = scanner.scan();
-    for token in tokens {
-        println!("{:?}", token);
+    let source = match fs::read_to_string(path) {
+        Err(why) => {
+            println!("{:?}", why);
+            ::std::process::exit(1);
+        }
+        Ok(s) => s,
+    };
+    let (tokens, scan_errors) = Scanner::new(&source).scan();
+    self::print_all("scan errors:", &scan_errors);
+    self::print_all("tokens:", &tokens);
+    let (mut stmts, parse_errors) = Parser::new(&tokens).parse();
+    self::print_all("parse errors:", &parse_errors);
+    self::interpret(&mut stmts);
+}
+
+// TODO: more generic code
+fn print_all<T>(description: &str, items: &[T])
+where
+    T: std::fmt::Debug,
+{
+    println!("{}", description);
+    for i in items {
+        println!("  {:?}", i);
     }
-    for error in errors {
-        println!("{:?}", error);
-    }
+    println!("");
 }
 
 pub fn run_repl() {
@@ -36,7 +54,7 @@ pub fn run_repl() {
         line.clear();
         io::stdin()
             .read_line(&mut line)
-            .expect("error when read_line");
+            .expect("error when reading stdin");
         match line.trim_end() {
             "q" | "quit" => {
                 break;
@@ -46,4 +64,10 @@ pub fn run_repl() {
     }
 }
 
-pub struct Lox {}
+pub fn interpret(stmts: &mut [Stmt]) {
+    println!("interuption:");
+    for stmt in stmts {
+        // println!("  stmt: {:?}", stmt);
+        stmt.execute();
+    }
+}
