@@ -1,19 +1,14 @@
 //! loxrs is a Lox implementation written in Rust.
 //! It's just a hobby project and not so sopihsticated.
-
-// TODO: not using extern crate?
-extern crate itertools;
-
+//!
 mod abs;
-mod parser;
-mod scanner;
-mod token;
+mod walk;
 
-use abs::stmt::Stmt;
-use parser::Parser;
-use scanner::Scanner;
+use crate::abs::stmt::Stmt;
+use crate::walk::parser::Parser;
+use crate::walk::scanner::Scanner;
 
-use std::fs::{self, File};
+use std::fs;
 use std::io::{self, Write}; // flush()
 
 pub fn run_file(path: &str) {

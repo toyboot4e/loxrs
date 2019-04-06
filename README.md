@@ -1,3 +1,3 @@
 # loxrs
-Yet another hobby project to follow [Crafting Interpreters](http://www.craftinginterpreters.com/) the book in Rust. This project is in very early stage.  
+Yet another hobby project to follow the book [Crafting Interpreters](http://www.craftinginterpreters.com/) in Rust. Now doing: Ch.8 (Statements and State).  
 

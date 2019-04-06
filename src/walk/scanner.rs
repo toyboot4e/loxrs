@@ -1,6 +1,6 @@
 use itertools::{multipeek, MultiPeek};
 
-use crate::token::{SourcePosition, SourceToken, Token};
+use crate::abs::token::{SourcePosition, SourceToken, Token};
 use std::str::Chars;
 
 mod char_ext {
@@ -28,10 +28,12 @@ mod char_ext {
 }
 
 #[derive(Debug, Clone)]
-pub enum ScannerError {
+pub enum ScanError {
     UnterminatedString(SourcePosition),
     UnexpectedCharacter(char, SourcePosition),
 }
+
+type Result<T> = std::result::Result<T, ScanError>;
 
 pub struct Scanner<'a> {
     source: MultiPeek<Chars<'a>>,
@@ -39,7 +41,9 @@ pub struct Scanner<'a> {
     position: SourcePosition,
 }
 
+// TODO: extracting source iterator
 impl<'a> Scanner<'a> {
+    // TODO: make Scanner not to be owned
     pub fn new(src: &'a str) -> Self {
         Self {
             source: multipeek(src.chars()),
@@ -48,9 +52,9 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    pub fn scan(&mut self) -> (Vec<SourceToken>, Vec<ScannerError>) {
+    pub fn scan(&mut self) -> (Vec<SourceToken>, Vec<ScanError>) {
         let mut tokens = Vec::<SourceToken>::new();
-        let mut errors = Vec::<ScannerError>::new();
+        let mut errors = Vec::<ScanError>::new();
 
         loop {
             let position = self.position;
@@ -138,7 +142,7 @@ impl<'a> Scanner<'a> {
     }
 
     /// Returns None for tokens to be discarded.
-    fn scan_token(&mut self) -> Option<Result<Token, ScannerError>> {
+    fn scan_token(&mut self) -> Option<Result<Token>> {
         use Token::*;
         self.lexeme.clear();
 
@@ -178,7 +182,7 @@ impl<'a> Scanner<'a> {
             '"' => self.scan_string(),
             c if char_ext::is_digit(c) => self.scan_number(),
             c if char_ext::is_alpha(c) => self.scan_identifier(),
-            _ => return Some(Err(ScannerError::UnexpectedCharacter(c, self.position))),
+            _ => return Some(Err(ScanError::UnexpectedCharacter(c, self.position))),
         };
 
         return Some(_result);
@@ -194,10 +198,10 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    fn scan_string(&mut self) -> Result<Token, ScannerError> {
+    fn scan_string(&mut self) -> Result<Token> {
         loop {
             match self.advance() {
-                None => return Err(ScannerError::UnterminatedString(self.position)),
+                None => return Err(ScanError::UnterminatedString(self.position)),
                 Some('"') => {
                     // return removing both " characters
                     return Ok(Token::String(
@@ -211,7 +215,7 @@ impl<'a> Scanner<'a> {
 
     // disabled: a leading or trailing decimal point
     // TODO: enabling comma deliminated numbers
-    fn scan_number(&mut self) -> Result<Token, ScannerError> {
+    fn scan_number(&mut self) -> Result<Token> {
         self.advance_while(&char_ext::is_digit);
         if self.peek() == Some(&'.') {
             match self.peek_next() {
@@ -231,7 +235,7 @@ impl<'a> Scanner<'a> {
     }
 
     /// Scans an identifier or a reserved word.
-    fn scan_identifier(&mut self) -> Result<Token, ScannerError> {
+    fn scan_identifier(&mut self) -> Result<Token> {
         self.advance_while(&char_ext::is_alphanumeric);
         use Token::*;
         Ok(match self.lexeme.as_ref() {

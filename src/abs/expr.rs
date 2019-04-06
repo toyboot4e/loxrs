@@ -1,4 +1,4 @@
-use crate::token::Token;
+use crate::abs::token::Token;
 use std::convert::From;
 // TODO: benchmark lazy static vs match
 // TODO: combining oper and token or not
@@ -11,6 +11,7 @@ pub enum Expr {
     Binary(Box<BinaryArgs>),
     Logic(Box<LogicArgs>),
     Grouping(Box<GroupingArgs>),
+    // Variable(String),
 }
 
 impl Expr {
@@ -43,10 +44,6 @@ impl Expr {
 
     pub fn group(expr: Expr) -> Expr {
         Expr::Grouping(Box::new(GroupingArgs { expr: expr }))
-    }
-
-    pub fn evaluate(&mut self) {
-        //
     }
 }
 

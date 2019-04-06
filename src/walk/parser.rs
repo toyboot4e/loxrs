@@ -1,6 +1,6 @@
 use crate::abs::expr::*;
 use crate::abs::stmt::*;
-use crate::token::{SourcePosition, SourceToken, Token};
+use crate::abs::token::*;
 use std::iter::Peekable;
 
 #[derive(Debug, Clone)]
@@ -62,6 +62,7 @@ impl<'a> Parser<'a, std::slice::Iter<'a, SourceToken>> {
 // Impl block of helper functions
 // TODO: which to return: SourceToken or Token
 // TODO: Token vs &Token
+// TODO: lifetime? (read the rust book first)
 impl<'a, I> Parser<'a, I>
 where
     I: Iterator<Item = &'a SourceToken> + Sized,
@@ -91,11 +92,21 @@ where
         expected.iter().any(|t| t == &s_token.token)
     }
 
-    fn advance_if_match(&mut self, expected: &[Token]) -> Option<&SourceToken> {
-        if Self::_any(self.peek()?, expected) {
-            self.advance()
+    fn peek_match(&mut self, expected: &[Token]) -> Option<&&SourceToken> {
+        let s_token = self.peek()?;
+        if Self::_any(s_token, expected) {
+            Some(s_token)
         } else {
             None
+        }
+    }
+
+    fn advance_if_match(&mut self, expected: &[Token]) -> Option<bool> {
+        if Self::_any(self.peek()?, expected) {
+            self.advance();
+            Some(true)
+        } else {
+            Some(false)
         }
     }
 
@@ -130,34 +141,71 @@ impl<'a, I> Parser<'a, I>
 where
     I: Iterator<Item = &'a SourceToken> + Sized,
 {
-    // program   → statement* EOF ;
+    /// program     → declaration* EOF ;
+    /// Each rule is to be entered when it is expected or after some token for the beginning of it is consumed.
     pub fn parse(&mut self) -> (Vec<Stmt>, Vec<ParseError>) {
         let mut stmts = Vec::<Stmt>::new();
         let mut errors = Vec::<ParseError>::new();
 
-        while let Some(s_token) = self.parse_stmt() {
+        // TODO: making sure the next token is not None
+        // TODo: so that following functions dont need to care about it.
+        while let Some(s_token) = self.parse_declaration() {
             match s_token {
                 Ok(stmt) => stmts.push(stmt),
-                Err(why) => errors.push(why),
+                Err(why) => {
+                    errors.push(why);
+                    // not so good though
+                    self.synchronize();
+                }
             }
         }
 
         return (stmts, errors);
     }
 
+    /// declaration → varDecl | statement ;
+    fn parse_declaration(&mut self) -> Option<Result<Stmt>> {
+        Some(if self.advance_if_match(&[Token::Var])? {
+            self.stmt_var()
+        } else {
+            self.parse_stmt()
+        })
+    }
+
+    /// varDecl → "var" IDENTIFIER "=" expression ";" ;
+    ///
+    /// Different from the book, "=" is always required.
+    fn stmt_var(&mut self) -> Result<Stmt> {
+        let s_token = self.try_peek()?;
+        if let Token::Identifier(ref name) = s_token.token {
+            let name = name.clone();
+            self.try_advance_if_match(&[Token::Equal])?;
+            let expr = self.parse_expr()?;
+            self.try_advance_if_match(&[Token::Semicolon])?;
+            Ok(Stmt::var_dec(name, expr))
+        } else {
+            Err(ParseError::unexpected(
+                s_token,
+                &[Token::Identifier("".into())],
+            ))
+        }
+    }
+
     /// Returns some result until finding EoF.
     /// Sub rules don't consume an unexpected token.
-    pub fn parse_stmt(&mut self) -> Option<Result<Stmt>> {
+    /// statement   → exprStmt | printStmt ;
+    pub fn parse_stmt(&mut self) -> Result<Stmt> {
         use Token::*;
-        Some(match &self.advance()?.token {
+        match &self.try_advance()?.token {
             Print => self.stmt_print(),
             _ => self.stmt_expr(),
-        })
+        }
     }
 
     fn stmt_print(&mut self) -> Result<Stmt> {
         let expr = self.parse_expr()?;
         self.try_advance_if_match(&[Token::Semicolon])?;
+        // TODO: evaluate expression
         Ok(Stmt::print(format!("{:?}", expr)))
     }
 
@@ -166,7 +214,13 @@ where
         let expr = self.parse_expr()?;
         Ok(Stmt::expr(expr))
     }
+}
 
+// Impl block of expression parsing
+impl<'a, I> Parser<'a, I>
+where
+    I: Iterator<Item = &'a SourceToken> + Sized,
+{
     pub fn parse_expr(&mut self) -> Result<Expr> {
         self.expr_equality()
     }
@@ -187,7 +241,8 @@ where
         let mut expr = sub_rule(self)?;
         // TODO: advance_if_match and panic mode
         // TODO: Oper: From<&Token>
-        while let Some(token) = self.advance_if_match(delimiters).map(|s| s.token.clone()) {
+        while let Some(token) = self.peek_match(delimiters).map(|s| s.token.clone()) {
+            self.advance();
             let right = sub_rule(self)?;
             let oper = token.into().unwrap();
             expr = folder(expr, oper, right);
@@ -233,14 +288,17 @@ where
         self.rrp(&Self::expr_primary, &[Bang, Minus], &Expr::binary)
     }
 
-    /// primary → literal | group ;
+    /// primary → LITERAL | GROUP | IDENTIFIER ;
+    ///
     /// literal → NUMBER | STRING | "false" | "true" | "nil" ;
     /// group → "(" expr ")"
+    /// identifier →
     fn expr_primary(&mut self) -> Result<Expr> {
         // TODO: use match only once: the following line means opt.ok_or()?;
         let s_token = self.try_advance()?;
         if let Some(args) = LiteralArgs::from_token(&s_token.token) {
             Ok(args.into())
+        // } else let Identifier(ref name) = s_token.token {
         } else if s_token.token == Token::LeftParen {
             return self.expr_group();
         } else {

@@ -1,5 +1,4 @@
-use super::expr::Expr;
-use crate::token::Token;
+use crate::abs::expr::Expr;
 
 // exprStmt  → expression ";" ;
 // printStmt → "print" expression ";" ;
@@ -7,6 +6,7 @@ use crate::token::Token;
 pub enum Stmt {
     Expr(Box<Expr>),
     Print(Box<PrintArgs>),
+    Var(Box<VarDecArgs>),
 }
 
 impl Stmt {
@@ -21,9 +21,14 @@ impl Stmt {
     pub fn execute(&mut self) {
         use Stmt::*;
         match self {
-            Expr(expr) => expr.evaluate(),
+            Expr(expr) => unimplemented!(),
             Print(print) => print.execute(),
+            _ => {}
         }
+    }
+
+    pub fn var_dec(name: String, init: Expr) -> Self {
+        Stmt::Var(Box::new(VarDecArgs::new(name, init)))
     }
 }
 
@@ -35,5 +40,20 @@ pub struct PrintArgs {
 impl PrintArgs {
     pub fn execute(&self) {
         println!("print: {}", self.message);
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct VarDecArgs {
+    name: String,
+    init: Box<Expr>,
+}
+
+impl VarDecArgs {
+    pub fn new(name: String, init: Expr) -> Self {
+        Self {
+            name: name,
+            init: Box::new(init),
+        }
     }
 }
