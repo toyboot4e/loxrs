@@ -1,7 +1,9 @@
 //! loxrs is a Lox implementation written in Rust.
-//! It's just a hobby project and not so sopihsticated.
 //!
+//! It's just a hobby project and not so sopihsticated.
+#![warn(rust_2018_idioms)]
 mod abs;
+mod interpreter;
 mod walk;
 
 use crate::abs::stmt::Stmt;
@@ -11,6 +13,7 @@ use crate::walk::scanner::Scanner;
 use std::fs;
 use std::io::{self, Write}; // flush()
 
+// TODO: returning error
 pub fn run_file(path: &str) {
     let source = match fs::read_to_string(path) {
         Err(why) => {

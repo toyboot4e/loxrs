@@ -3,6 +3,8 @@ use crate::abs::stmt::*;
 use crate::abs::token::*;
 use std::iter::Peekable;
 
+type Result<T> = std::result::Result<T, ParseError>;
+
 #[derive(Debug, Clone)]
 pub enum ParseError {
     UnexpectedEof,
@@ -13,10 +15,12 @@ impl ParseError {
     pub fn unexpected(found: &SourceToken, expected: &[Token]) -> Self {
         ParseError::UnexpectedToken(UnexpectedTokenArgs::from_s_token(found, expected))
     }
+
     pub fn not_beginning_of_stmt(found: &SourceToken) -> Self {
         use Token::*;
         Self::unexpected(found, &[Print])
     }
+
     pub fn eof() -> Self {
         ParseError::UnexpectedEof
     }
@@ -40,8 +44,6 @@ impl UnexpectedTokenArgs {
     }
 }
 
-type Result<T> = std::result::Result<T, ParseError>;
-
 pub struct Parser<'a, I>
 where
     I: Iterator<Item = &'a SourceToken> + Sized,
@@ -51,7 +53,6 @@ where
 
 impl<'a> Parser<'a, std::slice::Iter<'a, SourceToken>> {
     // TODO: more abstarct constructor
-    // (maybe allowing implicit type conversion or like that)
     pub fn new(tokens: &'a [SourceToken]) -> Self {
         Parser {
             tokens: tokens.iter().peekable(),
@@ -60,9 +61,6 @@ impl<'a> Parser<'a, std::slice::Iter<'a, SourceToken>> {
 }
 
 // Impl block of helper functions
-// TODO: which to return: SourceToken or Token
-// TODO: Token vs &Token
-// TODO: lifetime? (read the rust book first)
 impl<'a, I> Parser<'a, I>
 where
     I: Iterator<Item = &'a SourceToken> + Sized,
@@ -75,7 +73,6 @@ where
         self.tokens.next()
     }
 
-    // TODO: benchmark performance between self.try_peek()?; and match self.peek() { .. }
     fn try_peek(&mut self) -> Result<&&SourceToken> {
         self.peek().ok_or(ParseError::eof())
     }
@@ -136,20 +133,19 @@ where
     }
 }
 
-// Impl block of parse functions
+// Parse functions
 impl<'a, I> Parser<'a, I>
 where
     I: Iterator<Item = &'a SourceToken> + Sized,
 {
-    /// program     → declaration* EOF ;
-    /// Each rule is to be entered when it is expected or after some token for the beginning of it is consumed.
+    /// program → declaration* EOF ;
+    ///
+    /// The entry point of the predictive parsing.
     pub fn parse(&mut self) -> (Vec<Stmt>, Vec<ParseError>) {
         let mut stmts = Vec::<Stmt>::new();
         let mut errors = Vec::<ParseError>::new();
 
-        // TODO: making sure the next token is not None
-        // TODo: so that following functions dont need to care about it.
-        while let Some(s_token) = self.parse_declaration() {
+        while let Some(s_token) = self.parse_dec() {
             match s_token {
                 Ok(stmt) => stmts.push(stmt),
                 Err(why) => {
@@ -164,25 +160,32 @@ where
     }
 
     /// declaration → varDecl | statement ;
-    fn parse_declaration(&mut self) -> Option<Result<Stmt>> {
-        Some(if self.advance_if_match(&[Token::Var])? {
+    ///
+    /// The entry point of predictive parsing, used as an iterator.
+    ///
+    /// Predictive parsers are named as `stmt_xxx` or `stmt_expr`
+    fn parse_dec(&mut self) -> Option<Result<Stmt>> {
+        let did_match = self.advance_if_match(&[Token::Var])?;
+        let result = if did_match {
             self.stmt_var()
         } else {
             self.parse_stmt()
-        })
+        };
+        Some(result)
     }
 
     /// varDecl → "var" IDENTIFIER "=" expression ";" ;
     ///
-    /// Different from the book, "=" is always required.
+    /// The initializer is always needed, different from the original Lox.
     fn stmt_var(&mut self) -> Result<Stmt> {
         let s_token = self.try_peek()?;
         if let Token::Identifier(ref name) = s_token.token {
-            let name = name.clone();
+            let name = name.clone(); // releases &mut self
+            self.advance(); // consuming the identifier
             self.try_advance_if_match(&[Token::Equal])?;
-            let expr = self.parse_expr()?;
+            let init = self.parse_expr()?;
             self.try_advance_if_match(&[Token::Semicolon])?;
-            Ok(Stmt::var_dec(name, expr))
+            Ok(Stmt::var_dec(name, init))
         } else {
             Err(ParseError::unexpected(
                 s_token,
@@ -191,9 +194,10 @@ where
         }
     }
 
-    /// Returns some result until finding EoF.
-    /// Sub rules don't consume an unexpected token.
-    /// statement   → exprStmt | printStmt ;
+    /// statement → exprStmt | printStmt ;
+    ///
+    /// Returns some result until reaching EoF.
+    /// Note that sub rules don't consume unexpected tokens.
     pub fn parse_stmt(&mut self) -> Result<Stmt> {
         use Token::*;
         match &self.try_advance()?.token {
@@ -205,11 +209,10 @@ where
     fn stmt_print(&mut self) -> Result<Stmt> {
         let expr = self.parse_expr()?;
         self.try_advance_if_match(&[Token::Semicolon])?;
-        // TODO: evaluate expression
+        // TODO: adding Expr -> String functions for printing
         Ok(Stmt::print(format!("{:?}", expr)))
     }
 
-    /// Sub rules don't consume an unexpected token.
     fn stmt_expr(&mut self) -> Result<Stmt> {
         let expr = self.parse_expr()?;
         Ok(Stmt::expr(expr))
@@ -225,22 +228,26 @@ where
         self.expr_equality()
     }
 
-    /// Right recursive parsing: Expr (Oper Expr)*
-    /// Expr is created by sub_rule, which may return error.
-    /// Doesn't consume unexpected token.
-    // TODO: #[inline], macro, etc for performance.
-    fn rrp<Oper>(
+    /// Rule → Expr (Oper Expr)*
+    ///
+    /// Abstracts right recursive parsing.
+    /// You don't need explicitly give type parameters.
+    #[inline]
+    fn rrp<Oper, SubRule, Folder>(
         &mut self,
-        sub_rule: &Fn(&mut Self) -> Result<Expr>,
+        sub_rule: SubRule,
         delimiters: &[Token],
-        folder: &Fn(Expr, Oper, Expr) -> Expr,
+        folder: Folder,
     ) -> Result<Expr>
     where
         Token: Into<Option<Oper>>,
+        SubRule: Fn(&mut Self) -> Result<Expr>,
+        Folder: Fn(Expr, Oper, Expr) -> Expr,
     {
         let mut expr = sub_rule(self)?;
         // TODO: advance_if_match and panic mode
         // TODO: Oper: From<&Token>
+        // TODO: no cloning
         while let Some(token) = self.peek_match(delimiters).map(|s| s.token.clone()) {
             self.advance();
             let right = sub_rule(self)?;
@@ -253,7 +260,7 @@ where
     /// equality → comparison ( ( "!=" | "==" ) comparison )* ;
     fn expr_equality(&mut self) -> Result<Expr> {
         use Token::*;
-        self.rrp::<BinaryOper>(
+        self.rrp(
             &Self::expr_comparison,
             &[EqualEqual, BangEqual],
             &Expr::binary,
@@ -292,26 +299,29 @@ where
     ///
     /// literal → NUMBER | STRING | "false" | "true" | "nil" ;
     /// group → "(" expr ")"
-    /// identifier →
     fn expr_primary(&mut self) -> Result<Expr> {
         // TODO: use match only once: the following line means opt.ok_or()?;
         let s_token = self.try_advance()?;
         if let Some(args) = LiteralArgs::from_token(&s_token.token) {
-            Ok(args.into())
-        // } else let Identifier(ref name) = s_token.token {
-        } else if s_token.token == Token::LeftParen {
-            return self.expr_group();
-        } else {
-            use Token::*;
-            Err(ParseError::unexpected(
-                s_token,
-                &[Number(0.0), String("".into()), False, True, Nil, LeftParen],
-            ))
+            return Ok(args.into());
+        }
+        use Token::*;
+        match s_token.token {
+            LeftParen => self.expr_group(),
+            Identifier(ref name) => unimplemented!(),
+            _ => {
+                Err(ParseError::unexpected(
+                    s_token,
+                    // TODO: abstract token for literals
+                    &[Number(0.0), String("".into()), False, True, Nil, LeftParen],
+                ))
+            }
         }
     }
 
     /// group → "(" expression ")"
-    /// To be called after consuming "("
+    ///
+    /// To be called after consuming "(" (predictive parsing).
     fn expr_group(&mut self) -> Result<Expr> {
         // TODO: synchronize
         let expr = self.parse_expr()?;
@@ -319,7 +329,8 @@ where
         Ok(expr)
     }
 
-    /// Enters panic mode and tries to go to next statement (though it's not so accurate).
+    /// Enters panic mode and tries to go to next statement.
+    ///
     /// It goes to a next semicolon, which may not be the beginning of the next statement.
     fn synchronize(&mut self) {
         while let Some(s_token) = self.peek() {
