@@ -53,7 +53,7 @@ impl From<LiteralArgs> for Expr {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub enum LiteralArgs {
     Nil,
     Bool(bool),
@@ -62,9 +62,9 @@ pub enum LiteralArgs {
 }
 
 impl LiteralArgs {
-    pub fn from_token(t: &Token) -> Option<LiteralArgs> {
+    pub fn from_token(token: &Token) -> Option<LiteralArgs> {
         use Token::*;
-        Some(match t {
+        Some(match token {
             Nil => LiteralArgs::Nil,
             True => LiteralArgs::Bool(true),
             False => LiteralArgs::Bool(false),
@@ -136,6 +136,16 @@ pub enum BinaryOper {
     LessEqual,
     Greater,
     GreaterEqual,
+}
+
+impl BinaryOper {
+    pub fn is_logic(&self) -> bool {
+        use BinaryOper::*;
+        match self {
+            Equal | NotEqual | Less | LessEqual | Greater | GreaterEqual => true,
+            _ => false,
+        }
+    }
 }
 
 impl From<Token> for Option<BinaryOper> {

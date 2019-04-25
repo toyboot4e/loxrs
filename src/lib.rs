@@ -7,8 +7,8 @@ mod interpreter;
 mod walk;
 
 use crate::abs::stmt::Stmt;
-use crate::walk::parser::Parser;
-use crate::walk::scanner::Scanner;
+use crate::interpreter::Interpreter;
+use crate::walk::{parser::Parser, scanner::Scanner};
 
 use std::fs;
 use std::io::{self, Write}; // flush()
@@ -17,7 +17,7 @@ use std::io::{self, Write}; // flush()
 pub fn run_file(path: &str) {
     let source = match fs::read_to_string(path) {
         Err(why) => {
-            println!("{:?}", why);
+            println!("{}", why);
             ::std::process::exit(1);
         }
         Ok(s) => s,
@@ -63,9 +63,13 @@ pub fn run_repl() {
 }
 
 pub fn interpret(stmts: &mut [Stmt]) {
+    let mut interpreter = Interpreter::new();
     println!("interuption:");
     for stmt in stmts {
         // println!("  stmt: {:?}", stmt);
-        stmt.execute();
+        if let Err(why) = interpreter.interpret(stmt) {
+            println!("{:?}", why);
+            break;
+        }
     }
 }

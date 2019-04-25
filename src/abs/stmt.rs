@@ -18,15 +18,6 @@ impl Stmt {
         Stmt::Print(Box::new(PrintArgs { message: message }))
     }
 
-    pub fn execute(&mut self) {
-        use Stmt::*;
-        match self {
-            Expr(expr) => unimplemented!(),
-            Print(print) => print.execute(),
-            _ => {}
-        }
-    }
-
     pub fn var_dec(name: String, init: Expr) -> Self {
         Stmt::Var(Box::new(VarDecArgs::new(name, init)))
     }
@@ -34,22 +25,17 @@ impl Stmt {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct PrintArgs {
-    message: String,
-}
-
-impl PrintArgs {
-    pub fn execute(&self) {
-        println!("print: {}", self.message);
-    }
+    pub message: String,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct VarDecArgs {
-    name: String,
-    init: Box<Expr>,
+    pub name: String,
+    pub init: Box<Expr>,
 }
 
 impl VarDecArgs {
+    /// Unlike the original Lox language, initializer is always explicit.
     pub fn new(name: String, init: Expr) -> Self {
         Self {
             name: name,

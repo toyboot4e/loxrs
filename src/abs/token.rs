@@ -60,24 +60,30 @@ impl SourcePosition {
     pub fn initial() -> Self {
         Self::new(1, 1)
     }
+
     pub fn new(line: usize, column: usize) -> Self {
         Self {
             line: line,
             column: column,
         }
     }
+
     pub fn line(&self) -> usize {
         self.line
     }
+
     pub fn column(&self) -> usize {
         self.column
     }
+
     pub fn inc_line(&mut self) {
         self.line += 1;
     }
+
     pub fn inc_column(&mut self) {
         self.column += 1;
     }
+
     pub fn init_column(&mut self) {
         self.column = 1;
     }
