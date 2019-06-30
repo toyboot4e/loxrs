@@ -54,7 +54,6 @@ where
     }
 
     fn peek(&mut self) -> Option<&char> {
-        println!("CALLED");
         self.src.reset_peek();
         self.src.peek()
     }
@@ -118,7 +117,7 @@ where
         P: Fn(char) -> bool,
     {
         while let Some(c) = self.next() {
-            if !predicate(c) {
+            if predicate(c) {
                 return true;
             }
         }
@@ -176,7 +175,6 @@ impl<'a> Scanner<'a> {
                         break;
                     }
                     Ok(token) => {
-                        println!("{:?}", token);
                         tokens.push(self.add_context(token, pos));
                     }
                     Err(why) => {
@@ -283,7 +281,6 @@ impl<'a> Scanner<'a> {
     /// Scans an identifier or a reserved word.
     fn scan_identifier(&mut self) -> Result<Token> {
         self.state.advance_while(&char_ext::is_alphanumeric);
-        println!("pos: {:?}, lexeme: {}", self.state.pos(), self.state.lexeme);
         use Token::*;
         Ok(match self.state.lexeme.as_ref() {
             "and" => And,
