@@ -8,6 +8,7 @@ pub trait ExprVisitor<T> {
     fn visit_expr(&mut self, expr: &Expr) -> T {
         use Expr::*;
         match expr {
+            // use as_ref to for unboxing
             Literal(args) => self.visit_literal(args),
             Unary(args) => self.visit_unary(args.as_ref()),
             Binary(args) => self.visit_binary(args.as_ref()),
@@ -26,7 +27,7 @@ pub trait StmtVisitor<T> {
         use Stmt::*;
         match stmt {
             Expr(expr) => self.visit_expr(expr.as_ref()),
-            Print(print) => self.visit_print(print.as_ref()),
+            Print(print) => self.visit_print(print),
             Var(var) => self.visit_var(var.as_ref()),
         }
     }

@@ -1,15 +1,136 @@
-use itertools::{multipeek, MultiPeek};
+use ::itertools::{multipeek, MultiPeek, PeekingNext};
 
 use crate::abs::token::{SourcePosition, SourceToken, Token};
 use std::str::Chars;
+
+pub struct ScanState<I>
+where
+    I: Iterator<Item = char>,
+{
+    src: MultiPeek<I>,
+    pos: SourcePosition,
+    lexeme: String,
+}
+
+impl<'a> ScanState<Chars<'a>> {
+    pub fn new(s: &'a str) -> Self {
+        ScanState {
+            src: multipeek(s.chars()),
+            pos: SourcePosition::initial(),
+            lexeme: String::new(),
+        }
+    }
+}
+
+impl<I> Iterator for ScanState<I>
+where
+    I: Iterator<Item = char>,
+{
+    type Item = char;
+    fn next(&mut self) -> Option<char> {
+        let next = self.src.next();
+        if let Some(c) = next {
+            self.lexeme.push(c);
+            match c {
+                '\n' => {
+                    self.pos.inc_line();
+                    self.pos.init_column();
+                }
+                _ => {
+                    self.pos.inc_column();
+                }
+            };
+        }
+        next
+    }
+}
+
+impl<I> ScanState<I>
+where
+    I: Iterator<Item = char>,
+{
+    fn pos(&self) -> SourcePosition {
+        self.pos
+    }
+
+    fn peek(&mut self) -> Option<&char> {
+        println!("CALLED");
+        self.src.reset_peek();
+        self.src.peek()
+    }
+
+    fn peek_next(&mut self) -> Option<&char> {
+        self.src.peek()
+    }
+
+    fn clear_lexeme(&mut self) {
+        self.lexeme.clear();
+    }
+}
+
+/// Mutation-based iterational methods
+impl<I> ScanState<I>
+where
+    I: Iterator<Item = char>,
+{
+    pub fn next_if<P>(&mut self, predicate: P) -> Option<char>
+    where
+        P: Fn(&char) -> bool,
+    {
+        if let Some(c) = self.peek() {
+            if predicate(c) {
+                self.next()
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    // TODO: char vs &char
+    pub fn advance_if_char(&mut self, c: char) -> bool {
+        if Some(&c) == self.peek() {
+            self.next();
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Advances while the peek matches `predicate`; peeks char by char
+    pub fn advance_while<P>(&mut self, predicate: P) -> bool
+    where
+        P: Fn(char) -> bool,
+    {
+        while let Some(&c) = self.peek() {
+            if !predicate(c) {
+                return true;
+            }
+            self.next();
+        }
+        return false;
+    }
+
+    /// Advances until finding; doesn't peek
+    pub fn advance_until<P>(&mut self, predicate: P) -> bool
+    where
+        P: Fn(char) -> bool,
+    {
+        while let Some(c) = self.next() {
+            if !predicate(c) {
+                return true;
+            }
+        }
+        return false;
+    }
+}
 
 mod char_ext {
     pub fn is_digit(c: char) -> bool {
         c >= '0' && c <= '9'
     }
 
-    /// Returns true if it may be a beginning of an identifier
-    /// i.e. an alphabet or an under score.
     pub fn is_alpha(c: char) -> bool {
         (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'
     }
@@ -17,58 +138,49 @@ mod char_ext {
     pub fn is_alphanumeric(c: char) -> bool {
         is_digit(c) || is_alpha(c)
     }
-
-    /// Returns true if it's a char to be discarded.
-    pub fn is_whitespace(c: char) -> bool {
-        match c {
-            ' ' | '\r' | '\t' | '\n' => true,
-            _ => false,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum ScanError {
-    UnterminatedString(SourcePosition),
-    UnexpectedCharacter(char, SourcePosition),
 }
 
 type Result<T> = std::result::Result<T, ScanError>;
-
-pub struct Scanner<'a> {
-    source: MultiPeek<Chars<'a>>,
-    lexeme: String,
-    position: SourcePosition,
+#[derive(Debug, Clone)]
+pub enum ScanError {
+    UnterminatedString(SourcePosition),
+    UnexpectedEof(SourcePosition),
+    UnexpectedCharacter(char, SourcePosition),
 }
 
-// TODO: extracting source iterator
+pub struct Scanner<'a> {
+    state: ScanState<Chars<'a>>,
+}
+
+/// Scanner implementation
 impl<'a> Scanner<'a> {
     // TODO: make Scanner not to be owned
     pub fn new(src: &'a str) -> Self {
         Self {
-            source: multipeek(src.chars()),
-            lexeme: String::new(),
-            position: SourcePosition::initial(),
+            state: ScanState::new(src),
         }
+    }
+
+    fn add_context(&mut self, token: Token, pos: SourcePosition) -> SourceToken {
+        SourceToken::new(token, pos, self.state.lexeme.clone())
     }
 
     pub fn scan(&mut self) -> (Vec<SourceToken>, Vec<ScanError>) {
         let mut tokens = Vec::<SourceToken>::new();
         let mut errors = Vec::<ScanError>::new();
-
         loop {
-            let position = self.position;
-            // None is just discarded
+            let pos = self.state.pos();
             if let Some(result) = self.scan_token() {
                 match result {
                     Ok(Token::Eof) => {
                         break;
                     }
                     Ok(token) => {
-                        tokens.push(self.add_context(token, position));
+                        println!("{:?}", token);
+                        tokens.push(self.add_context(token, pos));
                     }
-                    Err(error) => {
-                        errors.push(error);
+                    Err(why) => {
+                        errors.push(why);
                     }
                 }
             };
@@ -77,76 +189,12 @@ impl<'a> Scanner<'a> {
         return (tokens, errors);
     }
 
-    fn add_context(&mut self, token: Token, position: SourcePosition) -> SourceToken {
-        SourceToken::new(token, position, self.lexeme.clone())
-    }
-
-    fn peek(&mut self) -> Option<&char> {
-        self.source.reset_peek();
-        self.source.peek()
-    }
-
-    fn peek_next(&mut self) -> Option<&char> {
-        self.source.peek()
-    }
-
-    /// Advances the char-based iterator, incrementing the current position.
-    fn advance(&mut self) -> Option<char> {
-        let next = self.source.next();
-        if let Some(c) = next {
-            self.lexeme.push(c);
-            if c == '\n' {
-                self.position.inc_line();
-                self.position.init_column();
-            } else {
-                self.position.inc_column();
-            }
-        }
-        return next;
-    }
-
-    /// Returns true if it advanced.
-    fn advance_if_match(&mut self, expected: char) -> bool {
-        if self.peek() == Some(&expected) {
-            self.advance();
-            true
-        } else {
-            false
-        }
-    }
-
-    /// Returns hit EoF or not.
-    fn advance_until_match(&mut self, expected: char) -> bool {
-        loop {
-            match self.peek() {
-                Some(&c) if c == expected => {
-                    return false;
-                }
-                None => {
-                    return true;
-                }
-                _ => {
-                    self.advance();
-                }
-            }
-        }
-    }
-
-    fn advance_while(&mut self, conditional: &Fn(char) -> bool) {
-        while let Some(&c) = self.peek() {
-            if !conditional(c) {
-                return;
-            }
-            self.advance();
-        }
-    }
-
     /// Returns None for tokens to be discarded.
     fn scan_token(&mut self) -> Option<Result<Token>> {
         use Token::*;
-        self.lexeme.clear();
+        self.state.clear_lexeme();
 
-        let c = match self.advance() {
+        let c = match self.state.next() {
             None => return Some(Ok(Eof)),
             Some(x) => x,
         };
@@ -162,50 +210,48 @@ impl<'a> Scanner<'a> {
             '-' => Ok(Minus),
             ';' => Ok(Semicolon),
             '*' => Ok(Star),
-            '!' => Ok(self.scan_operator('=', BangEqual, Bang)),
-            '=' => Ok(self.scan_operator('=', EqualEqual, Equal)),
-            '<' => Ok(self.scan_operator('=', LessEqual, Less)),
-            '>' => Ok(self.scan_operator('=', GreaterEqual, Greater)),
+            '!' => self.scan_operator('=', BangEqual, Bang),
+            '=' => self.scan_operator('=', EqualEqual, Equal),
+            '<' => self.scan_operator('=', LessEqual, Less),
+            '>' => self.scan_operator('=', GreaterEqual, Greater),
             '/' => {
-                if self.advance_if_match('/') {
-                    if self.advance_until_match('\n') {
-                        // Hit EoF
-                        return Some(Ok(Eof));
+                if self.state.advance_if_char('/') {
+                    self.state.advance_until(|c| c == '\n');
+                    return if self.state.peek().is_some() {
+                        None
                     } else {
-                        return None;
-                    }
+                        Some(Ok(Eof))
+                    };
                 } else {
                     Ok(Slash)
                 }
             }
+            // skip_while
             ' ' | '\r' | '\t' | '\n' => return None,
             '"' => self.scan_string(),
             c if char_ext::is_digit(c) => self.scan_number(),
             c if char_ext::is_alpha(c) => self.scan_identifier(),
-            _ => return Some(Err(ScanError::UnexpectedCharacter(c, self.position))),
+            _ => Err(ScanError::UnexpectedCharacter(c, self.state.pos())),
         };
 
         return Some(_result);
     }
 
-    // TODO: skipping block comment
-    fn scan_operator(&mut self, expected: char, if_true: Token, if_false: Token) -> Token {
-        if self.peek() == Some(&expected) {
-            self.advance();
-            if_true
-        } else {
-            if_false
-        }
+    fn scan_operator(&mut self, expected: char, if_true: Token, if_false: Token) -> Result<Token> {
+        self.state
+            .next()
+            .map(|c| if c == expected { if_true } else { if_false })
+            .ok_or_else(|| ScanError::UnexpectedEof(self.state.pos()))
     }
 
     fn scan_string(&mut self) -> Result<Token> {
         loop {
-            match self.advance() {
-                None => return Err(ScanError::UnterminatedString(self.position)),
+            match self.state.next() {
+                None => return Err(ScanError::UnterminatedString(self.state.pos())),
                 Some('"') => {
-                    // return removing both " characters
+                    // remove both " characters
                     return Ok(Token::String(
-                        self.lexeme[1..self.lexeme.len() - 1].to_string(),
+                        self.state.lexeme[1..self.state.lexeme.len() - 1].to_string(),
                     ));
                 }
                 _ => {}
@@ -216,29 +262,30 @@ impl<'a> Scanner<'a> {
     // disabled: a leading or trailing decimal point
     // TODO: enabling comma deliminated numbers
     fn scan_number(&mut self) -> Result<Token> {
-        self.advance_while(&char_ext::is_digit);
-        if self.peek() == Some(&'.') {
-            match self.peek_next() {
+        self.state.advance_while(&char_ext::is_digit);
+        if self.state.peek() == Some(&'.') {
+            match self.state.peek_next() {
                 Some(&c) if char_ext::is_digit(c) => {
-                    self.advance();
-                    self.advance_while(&char_ext::is_digit);
+                    self.state.next();
+                    self.state.advance_while(&char_ext::is_digit);
                 }
                 _ => {}
             }
         }
 
-        let n = self
-            .lexeme
-            .parse()
-            .expect(&format!("scan_number parsing error for {}", self.lexeme));
+        let n = self.state.lexeme.parse().expect(&format!(
+            "scan_number parsing error for {}",
+            self.state.lexeme
+        ));
         return Ok(Token::Number(n));
     }
 
     /// Scans an identifier or a reserved word.
     fn scan_identifier(&mut self) -> Result<Token> {
-        self.advance_while(&char_ext::is_alphanumeric);
+        self.state.advance_while(&char_ext::is_alphanumeric);
+        println!("pos: {:?}, lexeme: {}", self.state.pos(), self.state.lexeme);
         use Token::*;
-        Ok(match self.lexeme.as_ref() {
+        Ok(match self.state.lexeme.as_ref() {
             "and" => And,
             "class" => Class,
             "else" => Else,

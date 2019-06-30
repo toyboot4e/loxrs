@@ -3,6 +3,9 @@ name = "loxrs"
 version = "0.1.0"
 authors = ["toyboot4e <toyboot4e@gmail.com>"]
 edition = "2018"
+description = """
+loxrs is a (not so sophisticated) implementation of the Lox language.
+"""
 
 [dependencies]
 itertools = "0.8"

@@ -1,6 +1,7 @@
-//! loxrs is a Lox implementation written in Rust.
-//!
-//! It's just a hobby project and not so sopihsticated.
+//! loxrs is a Lox implementation in Rust.
+
+#![allow(dead_code)]
+#![allow(unused_variables)]
 #![warn(rust_2018_idioms)]
 mod abs;
 mod interpreter;
@@ -64,11 +65,11 @@ pub fn run_repl() {
 
 pub fn interpret(stmts: &mut [Stmt]) {
     let mut interpreter = Interpreter::new();
-    println!("interuption:");
+    println!("interruption:");
     for stmt in stmts {
         // println!("  stmt: {:?}", stmt);
         if let Err(why) = interpreter.interpret(stmt) {
-            println!("{:?}", why);
+            println!("RUNTINE ERROR: {:?}", why);
             break;
         }
     }

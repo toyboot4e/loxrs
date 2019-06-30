@@ -1,3 +1,5 @@
+//! Implements `ExprVisitor<Result<LoxObj, RuntimeError>>` for the `Interpreter`
+
 use crate::abs::expr::*;
 use crate::interpreter::{
     interpreter::{Interpreter, RuntimeError},
@@ -7,6 +9,17 @@ use crate::interpreter::{
 use std::cmp::Ordering;
 
 type Result<T> = ::std::result::Result<T, RuntimeError>;
+
+pub trait EvalExpr {
+    fn eval_expr(&mut self, expr: &Expr) -> Result<LoxObj>;
+}
+
+impl EvalExpr for Interpreter {
+    fn eval_expr(&mut self, expr: &Expr) -> Result<LoxObj> {
+        self.visit_expr(expr)
+    }
+}
+
 // TODO: using Value struct
 use LiteralArgs as Lit;
 use LoxObj::Value as ValObj;

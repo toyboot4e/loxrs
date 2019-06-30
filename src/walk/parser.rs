@@ -6,17 +6,17 @@ type Result<T> = std::result::Result<T, ParseError>;
 #[derive(Debug, Clone)]
 pub enum ParseError {
     UnexpectedEof,
-    UnexpectedToken(UnexpectedTokenArgs),
+    UnexpectedToken(UnexpectedTokenErrorArgs),
 }
 
 impl ParseError {
-    pub fn unexpected(found: &SourceToken, expected: &[Token]) -> Self {
-        ParseError::UnexpectedToken(UnexpectedTokenArgs::from_s_token(found, expected))
+    pub fn token(found: &SourceToken, expected: &[Token]) -> Self {
+        ParseError::UnexpectedToken(UnexpectedTokenErrorArgs::from_s_token(found, expected))
     }
 
     pub fn not_beginning_of_stmt(found: &SourceToken) -> Self {
         use Token::*;
-        Self::unexpected(found, &[Print])
+        Self::token(found, &[Print])
     }
 
     pub fn eof() -> Self {
@@ -25,16 +25,16 @@ impl ParseError {
 }
 
 #[derive(Debug, Clone)]
-pub struct UnexpectedTokenArgs {
+pub struct UnexpectedTokenErrorArgs {
     pos: SourcePosition,
     expected: Vec<Token>,
     found: Token,
 }
 
-impl UnexpectedTokenArgs {
+impl UnexpectedTokenErrorArgs {
     // TODO: more generic interface
     pub fn from_s_token(s_token: &SourceToken, expected: &[Token]) -> Self {
-        UnexpectedTokenArgs {
+        UnexpectedTokenErrorArgs {
             pos: s_token.pos,
             expected: expected.iter().cloned().collect(),
             found: s_token.token.clone(),
@@ -58,7 +58,7 @@ impl<'a> Parser<'a, std::slice::Iter<'a, SourceToken>> {
     }
 }
 
-// Impl block of helper functions
+/// Iterator implementations
 impl<'a, I> Parser<'a, I>
 where
     I: Iterator<Item = &'a SourceToken> + Sized,
@@ -67,28 +67,28 @@ where
         self.tokens.peek()
     }
 
-    fn advance(&mut self) -> Option<&SourceToken> {
+    fn next(&mut self) -> Option<&SourceToken> {
         self.tokens.next()
     }
 
-    /// Fails if the parser is at EoF.
+    fn advance(&mut self) -> bool {
+        self.tokens.next().is_some()
+    }
+
     fn try_peek(&mut self) -> Result<&&SourceToken> {
         self.peek().ok_or(ParseError::eof())
     }
 
-    /// Fails if the parser is at EoF.
     fn try_advance(&mut self) -> Result<&SourceToken> {
-        self.advance().ok_or(ParseError::eof())
+        self.next().ok_or(ParseError::eof())
     }
 
-    /// Just a wrapper of `Iterator::find.
-    /// Copies a `Token` if it's found.
-    // TODO: disable cloning
+    /// Just a wrapper around `Iterator::find`.
     fn _find(s_token: &SourceToken, expected: &[Token]) -> Option<Token> {
         expected.iter().cloned().find(|t| t == &s_token.token)
     }
 
-    /// Just a wrapper of `Iterator::any`. Faster than `_find` because it doesn't copy a token.
+    /// Just a wrapper around `Iterator::any`.
     fn _any(s_token: &SourceToken, expected: &[Token]) -> bool {
         expected.iter().any(|t| t == &s_token.token)
     }
@@ -114,7 +114,7 @@ where
     fn advance_if_any(&mut self, expected: &[Token]) -> Option<bool> {
         let opt = self.peek_any(expected);
         if let Some(true) = opt {
-            self.advance();
+            self.next();
         }
         opt
     }
@@ -122,7 +122,7 @@ where
     fn advance_if_find(&mut self, expected: &[Token]) -> Option<Token> {
         let opt = Self::_find(self.peek()?, expected);
         if opt.is_some() {
-            self.advance();
+            self.next();
         }
         opt
     }
@@ -130,7 +130,7 @@ where
     /// Just a wrapper of `Iterator::any`. Fails if nothing is found.
     /// Copies a `Token` if it's found.
     fn _try_find(s_token: &SourceToken, expected: &[Token]) -> Result<Token> {
-        Self::_find(s_token, expected).ok_or(ParseError::unexpected(s_token, expected))
+        Self::_find(s_token, expected).ok_or(ParseError::token(s_token, expected))
     }
 
     /// Fails if the peek doesn't match any of expected tokens.
@@ -145,13 +145,13 @@ where
     fn try_advance_if_find(&mut self, expected: &[Token]) -> Result<Token> {
         let result = self.try_peek_find(expected);
         if result.is_ok() {
-            self.advance();
+            self.next();
         }
         result
     }
 }
 
-// Parse functions
+/// Parser implementation
 impl<'a, I> Parser<'a, I>
 where
     I: Iterator<Item = &'a SourceToken> + Sized,
@@ -163,7 +163,7 @@ where
         let mut stmts = Vec::<Stmt>::new();
         let mut errors = Vec::<ParseError>::new();
 
-        while let Some(s_token) = self.parse_dec() {
+        while let Some(s_token) = self.parse_any() {
             match s_token {
                 Ok(stmt) => stmts.push(stmt),
                 Err(why) => {
@@ -176,10 +176,11 @@ where
         return (stmts, errors);
     }
 
+    /// root → declaration
     /// declaration → varDecl | statement ;
     ///
     /// The root of predictive parsing. Sub rules are named as `stmt_xxx` or `stmt_expr`.
-    fn parse_dec(&mut self) -> Option<Result<Stmt>> {
+    fn parse_any(&mut self) -> Option<Result<Stmt>> {
         if self.advance_if_any(&[Token::Var])? {
             self.stmt_var().into()
         } else {
@@ -194,16 +195,13 @@ where
         let s_token = self.try_peek()?;
         if let Token::Identifier(ref name) = s_token.token {
             let name = name.clone(); // releases &mut self
-            self.advance(); // consuming the identifier
+            self.next(); // consuming the identifier
             self.try_advance_if_find(&[Token::Equal])?;
             let init = self.parse_expr()?;
             self.try_advance_if_find(&[Token::Semicolon])?;
             Ok(Stmt::var_dec(name, init))
         } else {
-            Err(ParseError::unexpected(
-                s_token,
-                &[Token::Identifier("".into())],
-            ))
+            Err(ParseError::token(s_token, &[Token::Identifier("".into())]))
         }
     }
 
@@ -214,7 +212,7 @@ where
         use Token::*;
         match &self.try_peek()?.token {
             Print => {
-                self.advance();
+                self.next();
                 self.stmt_print()
             }
             _ => self.stmt_expr(),
@@ -228,7 +226,7 @@ where
         let expr = self.parse_expr()?;
         self.try_advance_if_find(&[Token::Semicolon])?;
         // TODO: adding Expr -> String functions for printing
-        Ok(Stmt::print(format!("{:?}", expr)))
+        Ok(Stmt::print(expr))
     }
 
     fn stmt_expr(&mut self) -> Result<Stmt> {
@@ -246,7 +244,6 @@ where
     /// Rule → Expr (Oper Expr)*
     ///
     /// Abstracts right recursive parsing.
-    /// You don't need explicitly give type parameters to this functin.
     #[inline]
     fn rrp<Oper, SubRule, Folder>(
         &mut self,
@@ -268,7 +265,7 @@ where
         return Ok(expr);
     }
 
-    /// It doesn't consume semicolon.
+    /// Note: doesn't consume semicolon.
     pub fn parse_expr(&mut self) -> Result<Expr> {
         self.expr_equality()
     }
@@ -322,16 +319,16 @@ where
     ///
     /// Make sure that there exists next token (predictive parsing).
     fn expr_primary(&mut self) -> Result<Expr> {
-        let s_token = self.advance().unwrap();
+        let s_token = self.next().unwrap();
         if let Some(args) = LiteralArgs::from_token(&s_token.token) {
             return Ok(args.into());
         }
         use Token::*;
         match s_token.token {
             LeftParen => self.expr_group(),
-            Identifier(ref name) => unimplemented!("Identifiers are not implemented to parse"),
+            Identifier(ref name) => unimplemented!("Identifier parsing is not yet implemented"),
             _ => {
-                Err(ParseError::unexpected(
+                Err(ParseError::token(
                     s_token,
                     // TODO: abstract token for literals
                     &[Number(0.0), String("".into()), False, True, Nil, LeftParen],
@@ -356,7 +353,7 @@ where
         while let Some(s_token) = self.peek() {
             let result = SyncPeekChecker::check_token(&s_token.token);
             if result.needs_advance {
-                self.advance();
+                self.next();
             }
             if result.ends {
                 break;

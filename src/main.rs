@@ -12,7 +12,7 @@ fn main() -> io::Result<()> {
             loxrs::run_file(&args[1]);
         }
         _ => {
-            panic!("");
+            eprintln!("Given more than one argument");
         }
     }
 

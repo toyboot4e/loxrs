@@ -26,6 +26,7 @@ impl Expr {
         }))
     }
 
+    /// comparison, addition, or multiplication
     pub fn binary(left: Expr, oper: BinaryOper, right: Expr) -> Expr {
         Expr::Binary(Box::new(BinaryArgs {
             left: left,
