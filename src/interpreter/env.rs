@@ -9,7 +9,7 @@ type Result<T> = ::std::result::Result<T, RuntimeError>;
 pub struct Env {
     map: RefCell<HashMap<String, LoxObj>>,
     /// Enclosing environment (if any)
-    parent: Weak<Self>,
+    parent: Weak<RefCell<Self>>,
 }
 
 impl Env {
@@ -20,14 +20,15 @@ impl Env {
         }
     }
 
-    pub fn from_parent(parent: &Rc<Self>) -> Self {
+    pub fn from_parent(parent: &Rc<RefCell<Self>>) -> Self {
         Env {
             map: RefCell::new(HashMap::new()),
             parent: Rc::downgrade(parent),
         }
     }
 
-    /// Clones the `LoxObj` with the `name`
+    // TODO: check non-recursive solution in CLox
+    /// Looks up enclosing environment and clones the found object
     pub fn get(&self, name: &str) -> Result<LoxObj> {
         self.map
             .borrow()
@@ -48,11 +49,14 @@ impl Env {
     pub fn assign(&mut self, name: &str, obj: LoxObj) -> Result<()> {
         let mut map = self.map.borrow_mut();
         match map.contains_key(name) {
-            false => {
+            true => {
                 map.insert(name.to_owned(), obj);
                 Ok(())
             }
-            true => Err(RuntimeError::Undefined(name.to_string())),
+            false => match self.parent.upgrade() {
+                Some(rc) => rc.borrow_mut().assign(name, obj),
+                None => Err(RuntimeError::Undefined(name.to_string())),
+            },
         }
     }
 }
