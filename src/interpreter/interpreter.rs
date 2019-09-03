@@ -30,6 +30,7 @@ impl Interpreter {
         }
     }
 
+    /// Implemented with Visitor pattern
     pub fn interpret(&mut self, stmt: &Stmt) -> Result<()> {
         self.visit_stmt(stmt)
     }
@@ -55,7 +56,6 @@ impl StmtVisitor<Result<()>> for Interpreter {
     fn visit_expr_stmt(&mut self, expr: &Expr) -> Result<()> {
         let v = self.eval_expr(expr)?;
         println!("expr: {:?}", v);
-        // println!("{:?}", expr);
         Ok(())
     }
 
@@ -71,6 +71,18 @@ impl StmtVisitor<Result<()>> for Interpreter {
         println!("var_dec: {:?} = {:?}", name, &obj);
         self.env.borrow_mut().define(name, obj)?;
         Ok(())
+    }
+
+    fn visit_block(&mut self, block: &[Stmt]) -> Result<()> {
+        let prev = Rc::clone(&self.env);
+        self.env = Rc::new(RefCell::new(Env::from_parent(&prev)));
+        if let Some(err_result) = block.iter().map(|x| self.interpret(x)).find(|x| x.is_err()) {
+            self.env = prev;
+            err_result
+        } else {
+            self.env = prev;
+            Ok(())
+        }
     }
 }
 
@@ -229,6 +241,5 @@ impl ExprVisitor<Result<LoxObj>> for Interpreter {
             Ok(obj) => Ok(obj.clone()), // FIXME
             Err(_) => Err(RuntimeError::Undefined(name.to_string())),
         }
-        //.get(name).map(|ref_cell| ref_cell.borrow_mut())
     }
 }

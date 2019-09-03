@@ -35,9 +35,11 @@ pub trait StmtVisitor<T> {
             Expr(expr) => self.visit_expr_stmt(expr.as_ref()),
             Print(print) => self.visit_print(print),
             Var(var) => self.visit_var_dec(var.as_ref()),
+            Block(block) => self.visit_block(block.as_ref()),
         }
     }
     fn visit_expr_stmt(&mut self, expr: &Expr) -> T;
     fn visit_print(&mut self, print: &PrintArgs) -> T;
     fn visit_var_dec(&mut self, var: &VarDecArgs) -> T;
+    fn visit_block(&mut self, block: &[Stmt]) -> T;
 }

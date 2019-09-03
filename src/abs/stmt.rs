@@ -7,6 +7,7 @@ pub enum Stmt {
     Expr(Box<Expr>),
     Print(PrintArgs),
     Var(Box<VarDecArgs>),
+    Block(Vec<Stmt>),
 }
 
 impl Stmt {

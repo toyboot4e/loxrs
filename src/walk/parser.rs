@@ -221,7 +221,7 @@ where
         }
     }
 
-    /// statement → exprStmt | printStmt ;
+    /// statement → exprStmt | printStmt | block ;
     ///
     /// Note that sub rules don't consume unexpected tokens.
     pub fn parse_stmt(&mut self) -> Result<Stmt> {
@@ -231,7 +231,29 @@ where
                 self.next();
                 self.stmt_print()
             }
+            LeftBrace => {
+                self.next();
+                self.stmt_block()
+            }
             _ => self.stmt_expr(),
+        }
+    }
+
+    /// block → "{" declaration* "}" ;
+    pub fn stmt_block(&mut self) -> Result<Stmt> {
+        let mut stmts = Vec::new();
+        loop {
+            match self.try_peek()?.token {
+                Token::RightBrace => {
+                    return Ok(Stmt::Block(stmts));
+                }
+                _ => {
+                    let stmt = self
+                        .parse_any()
+                        .unwrap_or_else(|| Err(ParseError::UnexpectedEof))?;
+                    stmts.push(stmt);
+                }
+            };
         }
     }
 

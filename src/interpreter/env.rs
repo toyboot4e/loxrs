@@ -28,13 +28,16 @@ impl Env {
     }
 
     // TODO: check non-recursive solution in CLox
+    // TODO: `get` without cloning
     /// Looks up enclosing environment and clones the found object
     pub fn get(&self, name: &str) -> Result<LoxObj> {
-        self.map
-            .borrow()
-            .get(name)
-            .cloned()
-            .ok_or_else(|| RuntimeError::Undefined(name.to_string()))
+        match self.map.borrow().get(name) {
+            Some(obj) => Ok(obj.clone()),
+            None => match self.parent.upgrade() {
+                Some(parent) => parent.borrow().get(name),
+                None => Err(RuntimeError::Undefined(name.to_string())),
+            },
+        }
     }
 
     pub fn define(&mut self, name: &str, obj: LoxObj) -> Result<()> {
