@@ -38,7 +38,7 @@ where
 {
     let out = io::stdout();
     let mut out = BufWriter::new(out.lock());
-    write!(out, "{}", description).unwrap();
+    writeln!(out, "{}", description).unwrap();
     for i in items {
         writeln!(out, "{:?}", i).unwrap();
     }
