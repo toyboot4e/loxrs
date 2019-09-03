@@ -11,7 +11,7 @@ pub enum Expr {
     Binary(Box<BinaryArgs>),
     Logic(Box<LogicArgs>),
     Grouping(Box<GroupingArgs>),
-    // Variable(String),
+    Variable(String),
 }
 
 impl Expr {
@@ -45,6 +45,10 @@ impl Expr {
 
     pub fn group(expr: Expr) -> Expr {
         Expr::Grouping(Box::new(GroupingArgs { expr: expr }))
+    }
+
+    pub fn var(name: &str) -> Expr {
+        Expr::Variable(name.to_string())
     }
 }
 

@@ -13,6 +13,7 @@ impl PrettyPrint for Expr {
             Binary(ref b) => b.pretty_print(),
             Logic(ref b) => b.pretty_print(),
             Grouping(ref expr) => expr.pretty_print(),
+            Variable(ref name) => format!("var: {}", name),
         }
     }
 }
