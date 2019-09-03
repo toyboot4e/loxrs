@@ -1,127 +1,138 @@
-use ::itertools::{multipeek, MultiPeek, PeekingNext};
-
 use crate::abs::token::{SourcePosition, SourceToken, Token};
 use std::str::Chars;
 
-pub struct ScanState<I>
-where
-    I: Iterator<Item = char>,
-{
-    src: MultiPeek<I>,
-    pos: SourcePosition,
-    lexeme: String,
-}
+/// Hides fields of `ScanState`
+mod hidden {
+    use ::itertools::{multipeek, MultiPeek};
 
-impl<'a> ScanState<Chars<'a>> {
-    pub fn new(s: &'a str) -> Self {
-        ScanState {
-            src: multipeek(s.chars()),
-            pos: SourcePosition::initial(),
-            lexeme: String::new(),
-        }
-    }
-}
+    use crate::abs::token::SourcePosition;
+    use std::str::Chars;
 
-impl<I> Iterator for ScanState<I>
-where
-    I: Iterator<Item = char>,
-{
-    type Item = char;
-    fn next(&mut self) -> Option<char> {
-        let next = self.src.next();
-        if let Some(c) = next {
-            self.lexeme.push(c);
-            match c {
-                '\n' => {
-                    self.pos.inc_line();
-                    self.pos.init_column();
-                }
-                _ => {
-                    self.pos.inc_column();
-                }
-            };
-        }
-        next
-    }
-}
-
-impl<I> ScanState<I>
-where
-    I: Iterator<Item = char>,
-{
-    fn pos(&self) -> SourcePosition {
-        self.pos
-    }
-
-    fn peek(&mut self) -> Option<&char> {
-        self.src.reset_peek();
-        self.src.peek()
-    }
-
-    fn peek_next(&mut self) -> Option<&char> {
-        self.src.peek()
-    }
-
-    fn clear_lexeme(&mut self) {
-        self.lexeme.clear();
-    }
-}
-
-/// Mutation-based iterational methods
-impl<I> ScanState<I>
-where
-    I: Iterator<Item = char>,
-{
-    pub fn next_if<P>(&mut self, predicate: P) -> Option<char>
+    pub struct ScanState<I>
     where
-        P: Fn(&char) -> bool,
+        I: Iterator<Item = char>,
     {
-        if let Some(c) = self.peek() {
-            if predicate(c) {
-                self.next()
+        src: MultiPeek<I>,
+        pos: SourcePosition,
+        lexeme: String,
+    }
+
+    impl<'a> ScanState<Chars<'a>> {
+        pub fn new(s: &'a str) -> Self {
+            ScanState {
+                src: multipeek(s.chars()),
+                pos: SourcePosition::initial(),
+                lexeme: String::new(),
+            }
+        }
+    }
+
+    impl<I> Iterator for ScanState<I>
+    where
+        I: Iterator<Item = char>,
+    {
+        type Item = char;
+        fn next(&mut self) -> Option<char> {
+            let next = self.src.next();
+            if let Some(c) = next {
+                self.lexeme.push(c);
+                match c {
+                    '\n' => {
+                        self.pos.inc_line();
+                        self.pos.init_column();
+                    }
+                    _ => {
+                        self.pos.inc_column();
+                    }
+                };
+            }
+            next
+        }
+    }
+
+    impl<I> ScanState<I>
+    where
+        I: Iterator<Item = char>,
+    {
+        pub fn pos(&self) -> SourcePosition {
+            self.pos
+        }
+
+        pub fn lexeme(&self) -> &str {
+            &self.lexeme
+        }
+
+        pub fn peek(&mut self) -> Option<&char> {
+            self.src.reset_peek();
+            self.src.peek()
+        }
+
+        pub fn peek_next(&mut self) -> Option<&char> {
+            self.src.peek()
+        }
+
+        pub fn clear_lexeme(&mut self) {
+            self.lexeme.clear();
+        }
+    }
+
+    /// Mutation-based iterational methods
+    impl<I> ScanState<I>
+    where
+        I: Iterator<Item = char>,
+    {
+        pub fn next_if<P>(&mut self, predicate: P) -> Option<char>
+        where
+            P: Fn(&char) -> bool,
+        {
+            if let Some(c) = self.peek() {
+                if predicate(c) {
+                    self.next()
+                } else {
+                    None
+                }
             } else {
                 None
             }
-        } else {
-            None
         }
-    }
 
-    // TODO: char vs &char
-    pub fn advance_if_char(&mut self, c: char) -> bool {
-        if Some(&c) == self.peek() {
-            self.next();
-            true
-        } else {
-            false
-        }
-    }
-
-    /// Advances while the peek matches `predicate`; peeks char by char
-    pub fn advance_while<P>(&mut self, predicate: P) -> bool
-    where
-        P: Fn(char) -> bool,
-    {
-        while let Some(&c) = self.peek() {
-            if !predicate(c) {
-                return true;
-            }
-            self.next();
-        }
-        return false;
-    }
-
-    /// Advances until finding; doesn't peek
-    pub fn advance_until<P>(&mut self, predicate: P) -> bool
-    where
-        P: Fn(char) -> bool,
-    {
-        while let Some(c) = self.next() {
-            if predicate(c) {
-                return true;
+        // TODO: char vs &char
+        /// Advances if the next character is `c`
+        pub fn consume_char(&mut self, c: char) -> bool {
+            if Some(&c) == self.peek() {
+                self.next();
+                true
+            } else {
+                false
             }
         }
-        return false;
+
+        /// Advances while the peek matches `predicate`; peeks char by char
+        pub fn advance_while<P>(&mut self, predicate: P) -> bool
+        where
+            P: Fn(char) -> bool,
+        {
+            while let Some(&c) = self.peek() {
+                if !predicate(c) {
+                    return true;
+                }
+                self.next();
+            }
+            return false;
+        }
+
+        /// Advances until finding; doesn't peek
+        pub fn advance_until<P>(&mut self, predicate: P) -> bool
+        where
+            P: Fn(char) -> bool,
+        {
+            while let Some(c) = self.next() {
+                if predicate(c) {
+                    return true;
+                }
+            }
+            return false;
+        }
     }
 }
 
@@ -148,7 +159,7 @@ pub enum ScanError {
 }
 
 pub struct Scanner<'a> {
-    state: ScanState<Chars<'a>>,
+    state: hidden::ScanState<Chars<'a>>,
 }
 
 /// Scanner implementation
@@ -156,12 +167,12 @@ impl<'a> Scanner<'a> {
     // TODO: make Scanner not to be owned
     pub fn new(src: &'a str) -> Self {
         Self {
-            state: ScanState::new(src),
+            state: hidden::ScanState::new(src),
         }
     }
 
     fn add_context(&mut self, token: Token, pos: SourcePosition) -> SourceToken {
-        SourceToken::new(token, pos, self.state.lexeme.clone())
+        SourceToken::new(token, pos, self.state.lexeme().to_string())
     }
 
     pub fn scan(&mut self) -> (Vec<SourceToken>, Vec<ScanError>) {
@@ -213,7 +224,7 @@ impl<'a> Scanner<'a> {
             '<' => self.scan_operator('=', LessEqual, Less),
             '>' => self.scan_operator('=', GreaterEqual, Greater),
             '/' => {
-                if self.state.advance_if_char('/') {
+                if self.state.consume_char('/') {
                     self.state.advance_until(|c| c == '\n');
                     return if self.state.peek().is_some() {
                         None
@@ -249,7 +260,7 @@ impl<'a> Scanner<'a> {
                 Some('"') => {
                     // remove both " characters
                     return Ok(Token::String(
-                        self.state.lexeme[1..self.state.lexeme.len() - 1].to_string(),
+                        self.state.lexeme()[1..self.state.lexeme().len() - 1].to_string(),
                     ));
                 }
                 _ => {}
@@ -271,9 +282,9 @@ impl<'a> Scanner<'a> {
             }
         }
 
-        let n = self.state.lexeme.parse().expect(&format!(
+        let n = self.state.lexeme().parse().expect(&format!(
             "scan_number parsing error for {}",
-            self.state.lexeme
+            self.state.lexeme()
         ));
         return Ok(Token::Number(n));
     }
@@ -282,7 +293,7 @@ impl<'a> Scanner<'a> {
     fn scan_identifier(&mut self) -> Result<Token> {
         self.state.advance_while(&char_ext::is_alphanumeric);
         use Token::*;
-        Ok(match self.state.lexeme.as_ref() {
+        Ok(match self.state.lexeme().as_ref() {
             "and" => And,
             "class" => Class,
             "else" => Else,

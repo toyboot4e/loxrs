@@ -1,3 +1,5 @@
+pub type Identifier = String;
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Token {
     // single character tokens
@@ -25,7 +27,7 @@ pub enum Token {
     LessEqual,
 
     // literals
-    Identifier(String),
+    Identifier(Identifier),
     String(String),
     Number(f64),
 
@@ -89,8 +91,7 @@ impl SourcePosition {
     }
 }
 
-/// [`Token`] with context in source code.
-/// It's often referred to as `s_token`.
+/// [`Token`] in source code. Often referred to as `s_token`
 #[derive(Debug)]
 pub struct SourceToken {
     pub token: Token,

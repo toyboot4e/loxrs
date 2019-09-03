@@ -1,8 +1,9 @@
 use std::env; // args
-use std::io; // Result
 use std::vec::Vec;
 
-fn main() -> io::Result<()> {
+fn main() {
+    ::env_logger::init();
+
     let args: Vec<String> = env::args().collect();
     match args.len() {
         0 | 1 => {
@@ -12,9 +13,7 @@ fn main() -> io::Result<()> {
             loxrs::run_file(&args[1]);
         }
         _ => {
-            eprintln!("Given more than one argument");
+            eprintln!("Given more than one arguments");
         }
     }
-
-    return Ok(());
 }
