@@ -253,6 +253,8 @@ impl<'a> Scanner<'a> {
             .ok_or_else(|| ScanError::UnexpectedEof(self.state.pos()))
     }
 
+    // TODO: enable rich enclosure such as ###"
+    // TODO: enable escapes
     fn scan_string(&mut self) -> Result<Token> {
         loop {
             match self.state.next() {
