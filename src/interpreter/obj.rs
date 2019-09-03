@@ -1,10 +1,17 @@
 use crate::abs::expr::*;
-use std::cmp;
 
-#[derive(Clone, Debug)]
+/// The primary object at runtime interpreting
+///
+/// primary → "true" | "false" | "nil"
+///         | NUMBER | STRING
+///         | "(" expression ")"
+///         | IDENTIFIER ;
+#[derive(Clone, Debug, PartialEq)]
 pub enum LoxObj {
     // TODO: literal -> value
     Value(LiteralArgs),
+    // Literal(LiteralArgs),
+    // Variable(String),
 }
 
 // pub enum ValueArgs {}
@@ -53,32 +60,3 @@ impl LoxObj {
         }
     }
 }
-
-use LoxObj::Value as ValObj;
-
-impl cmp::PartialEq for LoxObj {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (&ValObj(ref lhs), &ValObj(ref rhs)) => lhs.eq(rhs),
-            _ => false,
-        }
-    }
-}
-
-impl cmp::PartialOrd for LoxObj {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        match (self, other) {
-            (ValObj(ref left), ValObj(ref right)) => left.partial_cmp(right),
-            _ => None,
-        }
-    }
-}
-
-// impl fmt::Display for LoxObj {
-//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-//         use LoxObj::*;
-//         match *self {
-//             Literal(ref value) => value.fmt(),
-//         }
-//     }
-// }

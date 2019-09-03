@@ -5,6 +5,7 @@ type Result<T> = std::result::Result<T, ParseError>;
 
 #[derive(Debug, Clone)]
 pub enum ParseError {
+    // TODO: EoF error
     UnexpectedEof,
     UnexpectedToken(UnexpectedTokenErrorArgs),
 }
@@ -151,7 +152,7 @@ where
     }
 }
 
-/// Parser implementation
+/// Statement Parsing
 impl<'a, I> Parser<'a, I>
 where
     I: Iterator<Item = &'a SourceToken> + Sized,
@@ -174,6 +175,21 @@ where
         }
 
         return (stmts, errors);
+    }
+
+    /// Enters "panic mode" and tries to go to next statement.
+    ///
+    /// It goes to a next semicolon.
+    fn synchronize(&mut self) {
+        while let Some(s_token) = self.peek() {
+            let result = SyncPeekChecker::check_token(&s_token.token);
+            if result.needs_advance {
+                self.next();
+            }
+            if result.ends {
+                break;
+            }
+        }
     }
 
     /// root → declaration
@@ -205,7 +221,7 @@ where
         }
     }
 
-    /// statement → exprStmt | printStmt ;
+    /// statement → exprStmt | printStmt | block ;
     ///
     /// Note that sub rules don't consume unexpected tokens.
     pub fn parse_stmt(&mut self) -> Result<Stmt> {
@@ -215,7 +231,29 @@ where
                 self.next();
                 self.stmt_print()
             }
+            LeftBrace => {
+                self.next();
+                self.stmt_block()
+            }
             _ => self.stmt_expr(),
+        }
+    }
+
+    /// block → "{" declaration* "}" ;
+    pub fn stmt_block(&mut self) -> Result<Stmt> {
+        let mut stmts = Vec::new();
+        loop {
+            match self.try_peek()?.token {
+                Token::RightBrace => {
+                    return Ok(Stmt::Block(stmts));
+                }
+                _ => {
+                    let stmt = self
+                        .parse_any()
+                        .unwrap_or_else(|| Err(ParseError::UnexpectedEof))?;
+                    stmts.push(stmt);
+                }
+            };
         }
     }
 
@@ -236,7 +274,7 @@ where
     }
 }
 
-// Impl block of expression parsing
+// Expression parsing
 impl<'a, I> Parser<'a, I>
 where
     I: Iterator<Item = &'a SourceToken> + Sized,
@@ -326,7 +364,7 @@ where
         use Token::*;
         match s_token.token {
             LeftParen => self.expr_group(),
-            Identifier(ref name) => unimplemented!("Identifier parsing is not yet implemented"),
+            Identifier(ref name) => Ok(Expr::var(name)),
             _ => {
                 Err(ParseError::token(
                     s_token,
@@ -344,21 +382,6 @@ where
         let expr = self.parse_expr()?;
         self.try_advance_if_find(&[Token::RightParen])?;
         Ok(expr)
-    }
-
-    /// Enters panic mode and tries to go to next statement.
-    ///
-    /// It goes to a next semicolon.
-    fn synchronize(&mut self) {
-        while let Some(s_token) = self.peek() {
-            let result = SyncPeekChecker::check_token(&s_token.token);
-            if result.needs_advance {
-                self.next();
-            }
-            if result.ends {
-                break;
-            }
-        }
     }
 }
 
