@@ -1,18 +1,21 @@
 use crate::abs::expr::Expr;
 
-// exprStmt  → expression ";" ;
-// printStmt → "print" expression ";" ;
+// FIXME: where to box
+/// Stmt → expr | if | print | block ;
 #[derive(Clone, Debug, PartialEq)]
 pub enum Stmt {
-    Expr(Box<Expr>),
+    /// exprStmt  → expression ";" ;
+    Expr(Expr),
+    /// printStmt → "print" expression ";" ;
     Print(PrintArgs),
-    Var(Box<VarDecArgs>),
+    Var(VarDecArgs),
+    If(Box<IfArgs>),
     Block(Vec<Stmt>),
 }
 
 impl Stmt {
     pub fn expr(expr: Expr) -> Self {
-        Stmt::Expr(Box::new(expr))
+        Stmt::Expr(expr)
     }
 
     pub fn print(expr: Expr) -> Self {
@@ -20,7 +23,15 @@ impl Stmt {
     }
 
     pub fn var_dec(name: String, init: Expr) -> Self {
-        Stmt::Var(Box::new(VarDecArgs::new(name, init)))
+        Stmt::Var(VarDecArgs::new(name, init))
+    }
+
+    pub fn if_then_else(condition: Expr, then: Stmt, else_: Option<Stmt>) -> Self {
+        Stmt::If(Box::new(IfArgs {
+            condition: condition,
+            if_true: then,
+            if_false: else_,
+        }))
     }
 }
 
@@ -32,7 +43,7 @@ impl From<PrintArgs> for Stmt {
 
 impl From<VarDecArgs> for Stmt {
     fn from(item: VarDecArgs) -> Self {
-        Stmt::Var(Box::new(item))
+        Stmt::Var(item)
     }
 }
 
@@ -45,15 +56,24 @@ pub struct PrintArgs {
 #[derive(Clone, Debug, PartialEq)]
 pub struct VarDecArgs {
     pub name: String,
-    pub init: Box<Expr>,
+    pub init: Expr,
+}
+
+// split into IfThen and IfThenElse
+#[derive(Clone, Debug, PartialEq)]
+pub struct IfArgs {
+    pub condition: Expr,
+    pub if_true: Stmt,
+    /// May be `if`
+    pub if_false: Option<Stmt>,
 }
 
 impl VarDecArgs {
-    /// Unlike the original Lox language, initializer is always needed.
+    /// Unlike the original Lox language, loxrs always requires initializer for declarations
     pub fn new(name: String, init: Expr) -> Self {
         Self {
             name: name,
-            init: Box::new(init),
+            init: init,
         }
     }
 }

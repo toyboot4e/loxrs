@@ -73,6 +73,16 @@ impl StmtVisitor<Result<()>> for Interpreter {
         Ok(())
     }
 
+    fn visit_if(&mut self, if_: &IfArgs) -> Result<()> {
+        if self.eval_expr(&if_.condition)?.is_truthy() {
+            self.interpret(&if_.if_true)
+        } else if let Some(if_false) = if_.if_false.as_ref() {
+            self.interpret(if_false)
+        } else {
+            Ok(())
+        }
+    }
+
     fn visit_block(&mut self, block: &[Stmt]) -> Result<()> {
         let prev = Rc::clone(&self.env);
         self.env = Rc::new(RefCell::new(Env::from_parent(&prev)));
@@ -180,7 +190,7 @@ impl ExprVisitor<Result<LoxObj>> for Interpreter {
                 let n = obj.as_num().ok_or_else(|| RuntimeError::MismatchedType)?;
                 Ok(LoxObj::Value(Lit::Number(-n)))
             }
-            Not => Ok(LoxObj::bool(obj.is_truthy())),
+            Not => Ok(LoxObj::bool(!obj.is_truthy())),
         }
     }
 

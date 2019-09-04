@@ -1,5 +1,4 @@
 mod env;
-mod evaluate;
 mod interpreter;
 mod obj;
 mod visitor;

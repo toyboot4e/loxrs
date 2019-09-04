@@ -32,14 +32,16 @@ pub trait StmtVisitor<T> {
     fn visit_stmt(&mut self, stmt: &Stmt) -> T {
         use Stmt::*;
         match stmt {
-            Expr(expr) => self.visit_expr_stmt(expr.as_ref()),
+            Expr(expr) => self.visit_expr_stmt(expr),
             Print(print) => self.visit_print(print),
-            Var(var) => self.visit_var_dec(var.as_ref()),
+            Var(var) => self.visit_var_dec(var),
+            If(if_) => self.visit_if(if_),
             Block(block) => self.visit_block(block.as_ref()),
         }
     }
+    fn visit_var_dec(&mut self, var: &VarDecArgs) -> T;
     fn visit_expr_stmt(&mut self, expr: &Expr) -> T;
     fn visit_print(&mut self, print: &PrintArgs) -> T;
-    fn visit_var_dec(&mut self, var: &VarDecArgs) -> T;
+    fn visit_if(&mut self, if_: &IfArgs) -> T;
     fn visit_block(&mut self, block: &[Stmt]) -> T;
 }

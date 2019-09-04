@@ -235,6 +235,10 @@ where
                 self.next();
                 self.stmt_block()
             }
+            If => {
+                self.next();
+                self.stmt_if()
+            }
             _ => self.stmt_expr(),
         }
     }
@@ -245,6 +249,7 @@ where
         loop {
             match self.try_peek()?.token {
                 Token::RightBrace => {
+                    self.advance();
                     return Ok(Stmt::Block(stmts));
                 }
                 _ => {
@@ -267,6 +272,43 @@ where
         Ok(Stmt::print(expr))
     }
 
+    /// if → "if" expr block elseRecursive
+    pub fn stmt_if(&mut self) -> Result<Stmt> {
+        let condition = self.parse_expr()?;
+        self.try_advance_if_find(&[Token::LeftBrace])?;
+        let if_true = self.stmt_block()?;
+        let if_false = self._else_recursive()?;
+        Ok(Stmt::if_then_else(condition, if_true, if_false))
+    }
+
+    /// elseRecursive → ("else" "if" block)* ("else" block)?
+    fn _else_recursive(&mut self) -> Result<Option<Stmt>> {
+        match self.peek() {
+            Some(s_token) if s_token.token == Token::Else => {
+                self.advance();
+                match self.try_peek()? {
+                    // else if
+                    s_token if s_token.token == Token::If => {
+                        self.advance();
+                        let else_if = self.stmt_if()?;
+                        Ok(Some(else_if))
+                    }
+                    // else
+                    s_token if s_token.token == Token::LeftBrace => {
+                        self.advance();
+                        let else_ = self.stmt_block()?;
+                        Ok(Some(else_))
+                    }
+                    // else <unexpected>
+                    s_token => Err(ParseError::token(s_token, &[Token::If, Token::LeftBrace])),
+                }
+            }
+            // EoF or not if-else related token
+            _ => Ok(None),
+        }
+    }
+
+    /// exprStmt → expr ;
     fn stmt_expr(&mut self) -> Result<Stmt> {
         let expr = self.parse_expr()?;
         self.try_advance_if_find(&[Token::Semicolon])?;
@@ -274,12 +316,12 @@ where
     }
 }
 
-// Expression parsing
+/// Expression parsing
 impl<'a, I> Parser<'a, I>
 where
     I: Iterator<Item = &'a SourceToken> + Sized,
 {
-    /// Rule → Expr (Oper Expr)*
+    /// rrp → Subruple (Oper Subrule)*
     ///
     /// Abstracts right recursive parsing.
     #[inline]
@@ -303,7 +345,7 @@ where
         return Ok(expr);
     }
 
-    /// Note: doesn't consume semicolon.
+    /// Note: it doesn't consume semicolon.
     pub fn parse_expr(&mut self) -> Result<Expr> {
         self.expr_equality()
     }
@@ -344,8 +386,14 @@ where
     fn expr_unary(&mut self) -> Result<Expr> {
         use Token::*;
         match self.try_peek()?.token {
-            Minus => Ok(Expr::unary(UnaryOper::Minus, self.expr_unary()?)),
-            Bang => Ok(Expr::unary(UnaryOper::Not, self.expr_unary()?)),
+            Minus => {
+                self.advance();
+                Ok(Expr::unary(UnaryOper::Minus, self.expr_unary()?))
+            }
+            Bang => {
+                self.advance();
+                Ok(Expr::unary(UnaryOper::Not, self.expr_unary()?))
+            }
             _ => self.expr_primary(),
         }
     }
@@ -357,9 +405,9 @@ where
     ///
     /// Make sure that there exists next token (predictive parsing).
     fn expr_primary(&mut self) -> Result<Expr> {
-        let s_token = self.next().unwrap();
-        if let Some(args) = LiteralArgs::from_token(&s_token.token) {
-            return Ok(args.into());
+        let s_token = self.try_advance()?;
+        if let Some(literal) = LiteralArgs::from_token(&s_token.token) {
+            return Ok(literal.into());
         }
         use Token::*;
         match s_token.token {
