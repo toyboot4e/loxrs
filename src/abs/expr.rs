@@ -3,6 +3,7 @@ use std::convert::From;
 // TODO: benchmark lazy static vs match
 // TODO: combining oper and token or not
 
+// FIXME: where to box
 // specific subtypes are always needed for the pretty printer.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expr {
