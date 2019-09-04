@@ -29,6 +29,7 @@ pub fn run_file(path: &str) {
     self::print_all("====== tokens =====", &tokens);
     let (mut stmts, parse_errors) = Parser::new(&tokens).parse();
     self::print_all("===== parse errors =====", &parse_errors);
+    // TODO: print AST
     self::interpret(&mut stmts);
 }
 
@@ -81,7 +82,7 @@ pub fn interpret(stmts: &mut [Stmt]) {
         .find(|x| x.is_err())
     {
         Some(err) => {
-            println!("====== runtime errors =====");
+            println!("\n====== runtime errors =====");
             println!("{:?}", err);
         }
         None => {}
