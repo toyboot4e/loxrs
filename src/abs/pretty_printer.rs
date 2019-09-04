@@ -1,3 +1,6 @@
+//! Pretty prints expression
+//!
+// TODO: use ::std::fmt::Display
 use super::expr::*;
 
 pub trait PrettyPrint {
