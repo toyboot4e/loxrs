@@ -11,19 +11,19 @@ pub trait ExprVisitor<T> {
         use Expr::*;
         match expr {
             // use as_ref to for unboxing
-            Literal(args) => self.visit_literal(args),
-            Unary(args) => self.visit_unary(args.as_ref()),
-            Binary(args) => self.visit_binary(args.as_ref()),
-            Logic(args) => self.visit_logic(args.as_ref()),
+            Literal(args) => self.visit_literal_expr(args),
+            Unary(args) => self.visit_unary_expr(args.as_ref()),
+            Binary(args) => self.visit_binary_expr(args.as_ref()),
+            Logic(args) => self.visit_logic_expr(args.as_ref()),
             Grouping(args) => self.visit_expr(&args.expr),
-            Variable(name) => self.visit_var(name),
+            Variable(name) => self.visit_var_expr(name),
         }
     }
-    fn visit_literal(&mut self, literal: &LiteralArgs) -> T;
-    fn visit_unary(&mut self, unary: &UnaryArgs) -> T;
-    fn visit_binary(&mut self, binary: &BinaryArgs) -> T;
-    fn visit_logic(&mut self, logic: &LogicArgs) -> T;
-    fn visit_var(&mut self, name: &str) -> T;
+    fn visit_literal_expr(&mut self, literal: &LiteralArgs) -> T;
+    fn visit_unary_expr(&mut self, unary: &UnaryArgs) -> T;
+    fn visit_binary_expr(&mut self, binary: &BinaryArgs) -> T;
+    fn visit_logic_expr(&mut self, logic: &LogicArgs) -> T;
+    fn visit_var_expr(&mut self, name: &str) -> T;
 }
 
 /// Automates double dispatches
@@ -33,15 +33,15 @@ pub trait StmtVisitor<T> {
         use Stmt::*;
         match stmt {
             Expr(expr) => self.visit_expr_stmt(expr),
-            Print(print) => self.visit_print(print),
-            Var(var) => self.visit_var_dec(var),
-            If(if_) => self.visit_if(if_),
-            Block(block) => self.visit_block(block.as_ref()),
+            Print(print) => self.visit_print_stmt(print),
+            Var(var) => self.visit_var_dec_stmt(var),
+            If(if_) => self.visit_if_stmt(if_),
+            Block(block) => self.visit_block_stmt(block.as_ref()),
         }
     }
-    fn visit_var_dec(&mut self, var: &VarDecArgs) -> T;
+    fn visit_var_dec_stmt(&mut self, var: &VarDecArgs) -> T;
     fn visit_expr_stmt(&mut self, expr: &Expr) -> T;
-    fn visit_print(&mut self, print: &PrintArgs) -> T;
-    fn visit_if(&mut self, if_: &IfArgs) -> T;
-    fn visit_block(&mut self, block: &[Stmt]) -> T;
+    fn visit_print_stmt(&mut self, print: &PrintArgs) -> T;
+    fn visit_if_stmt(&mut self, if_: &IfArgs) -> T;
+    fn visit_block_stmt(&mut self, block: &[Stmt]) -> T;
 }
