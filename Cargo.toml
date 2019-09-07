@@ -3,9 +3,11 @@ name = "loxrs"
 version = "0.1.0"
 authors = ["toyboot4e <toyboot4e@gmail.com>"]
 edition = "2018"
-description = """
-loxrs is a (not so sophisticated) implementation of the Lox language.
-"""
+description = "An implementation of the Lox language in Rust"
+
+[[bin]]
+name = "loxrs"
+path = "bin/main.rs"
 
 [dependencies]
 log = "0.4.0"
