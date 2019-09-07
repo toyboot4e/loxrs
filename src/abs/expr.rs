@@ -1,5 +1,6 @@
 use crate::abs::token::Token;
 use std::convert::From;
+use crate::walk::ParseError;
 // TODO: benchmark lazy static vs match
 // TODO: combining oper and token or not
 
@@ -13,8 +14,10 @@ pub enum Expr {
     Logic(Box<LogicArgs>),
     Grouping(Box<GroupingArgs>),
     Variable(String),
+    Assign(Box<AssignArgs>),
 }
 
+/// Helpers for constructing / right recursive parsing
 impl Expr {
     pub fn literal(args: LiteralArgs) -> Expr {
         Expr::Literal(args)
@@ -50,6 +53,17 @@ impl Expr {
 
     pub fn var(name: &str) -> Expr {
         Expr::Variable(name.to_string())
+    }
+
+    pub fn assign(left: Expr, oper: AssignOper, right: Expr) -> Result<Expr, ParseError> {
+        match left {
+            Expr::Variable(ref name) =>
+        Ok(Expr::Assign(Box::new(AssignArgs{
+            name: name.to_string(),
+           expr: right,
+        }))),
+        _ => Err(ParseError::NotAssignable(left)),
+        }
     }
 }
 
@@ -200,4 +214,26 @@ impl From<Token> for Option<LogicOper> {
 #[derive(Clone, Debug, PartialEq)]
 pub struct GroupingArgs {
     pub expr: Expr,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct AssignArgs {
+    /// Name of the identifier to assign
+    pub name: String,
+    pub expr: Expr,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum AssignOper {
+    Equal,
+}
+
+impl From<Token> for Option<AssignOper> {
+    fn from(item: Token) -> Self {
+        use Token::*;
+        Some(match item {
+            Equal => AssignOper::Equal,
+            _ => return None,
+        })
+    }
 }

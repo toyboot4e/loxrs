@@ -1,4 +1,5 @@
 use crate::abs::{expr::*, stmt::*, token::*};
+use crate::interpreter::RuntimeError;
 use std::iter::Peekable;
 
 type Result<T> = std::result::Result<T, ParseError>;
@@ -8,6 +9,7 @@ pub enum ParseError {
     // TODO: EoF error
     UnexpectedEof,
     UnexpectedToken(UnexpectedTokenErrorArgs),
+    NotAssignable(Expr),
 }
 
 impl ParseError {
@@ -120,7 +122,8 @@ where
         opt
     }
 
-    fn advance_if_find(&mut self, expected: &[Token]) -> Option<Token> {
+    // FIXME: cannot identify token with fields
+    fn consume_any_of(&mut self, expected: &[Token]) -> Option<Token> {
         let opt = Self::_find(self.peek()?, expected);
         if opt.is_some() {
             self.next();
@@ -143,7 +146,7 @@ where
 
     /// Calls `Self::try_peek_find` and advance if it's ok.
     /// Copies a`Token` if it's found.
-    fn try_advance_if_find(&mut self, expected: &[Token]) -> Result<Token> {
+    fn try_consume_any_of(&mut self, expected: &[Token]) -> Result<Token> {
         let result = self.try_peek_find(expected);
         if result.is_ok() {
             self.next();
@@ -192,29 +195,28 @@ where
         }
     }
 
-    /// root → declaration
-    /// declaration → varDecl | statement ;
+    /// root → varDecl | statement ;
     ///
-    /// The root of predictive parsing. Sub rules are named as `stmt_xxx` or `stmt_expr`.
+    /// The root of predictive parsing. Sub rules are named as `stmt_xxx`.
     fn parse_any(&mut self) -> Option<Result<Stmt>> {
-        if self.advance_if_any(&[Token::Var])? {
-            self.stmt_var().into()
+        Some(if self.advance_if_any(&[Token::Var])? {
+            self.stmt_var_decl()
         } else {
-            self.parse_stmt().into()
-        }
+            self.parse_stmt()
+        })
     }
 
     /// varDecl → "var" IDENTIFIER "=" expression ";" ;
     ///
-    /// The initializer is always needed, different from the original Lox.
-    fn stmt_var(&mut self) -> Result<Stmt> {
+    /// The initializer is always required, different from the original Lox.
+    fn stmt_var_decl(&mut self) -> Result<Stmt> {
         let s_token = self.try_peek()?;
         if let Token::Identifier(ref name) = s_token.token {
             let name = name.clone(); // releases &mut self
             self.next(); // consuming the identifier
-            self.try_advance_if_find(&[Token::Equal])?;
+            self.try_consume_any_of(&[Token::Equal])?;
             let init = self.parse_expr()?;
-            self.try_advance_if_find(&[Token::Semicolon])?;
+            self.try_consume_any_of(&[Token::Semicolon])?;
             Ok(Stmt::var_dec(name, init))
         } else {
             Err(ParseError::token(s_token, &[Token::Identifier("".into())]))
@@ -267,7 +269,7 @@ where
     /// To be called after consuming `print` (predictive parsing).
     fn stmt_print(&mut self) -> Result<Stmt> {
         let expr = self.parse_expr()?;
-        self.try_advance_if_find(&[Token::Semicolon])?;
+        self.try_consume_any_of(&[Token::Semicolon])?;
         // TODO: adding Expr -> String functions for printing
         Ok(Stmt::print(expr))
     }
@@ -275,7 +277,7 @@ where
     /// if → "if" expr block elseRecursive
     pub fn stmt_if(&mut self) -> Result<Stmt> {
         let condition = self.parse_expr()?;
-        self.try_advance_if_find(&[Token::LeftBrace])?;
+        self.try_consume_any_of(&[Token::LeftBrace])?;
         let if_true = self.stmt_block()?;
         let if_false = self._else_recursive()?;
         Ok(Stmt::if_then_else(condition, if_true, if_false))
@@ -308,10 +310,14 @@ where
         }
     }
 
-    /// exprStmt → expr ;
+    /// Expression statement or (recursive) assignment
+    ///
+    /// exprStmt → IDENTIFIER "=" assignment
+    ///          | equality ;
+    // FIXME: no need to enter sync mode but returns Error
     fn stmt_expr(&mut self) -> Result<Stmt> {
         let expr = self.parse_expr()?;
-        self.try_advance_if_find(&[Token::Semicolon])?;
+        self.try_consume_any_of(&[Token::Semicolon])?;
         Ok(Stmt::expr(expr))
     }
 }
@@ -337,7 +343,7 @@ where
         Folder: Fn(Expr, Oper, Expr) -> Expr,
     {
         let mut expr = sub_rule(self)?;
-        while let Some(token) = self.advance_if_find(delimiters) {
+        while let Some(token) = self.consume_any_of(delimiters) {
             let right = sub_rule(self)?;
             let oper = token.into().unwrap();
             expr = folder(expr, oper, right);
@@ -345,9 +351,54 @@ where
         return Ok(expr);
     }
 
-    /// Note: it doesn't consume semicolon.
+    /// `Folder` can fail. Left and right rules may be different
+    #[inline]
+    fn rrp_2<Oper, SubRule, Folder>(
+        &mut self,
+        left: Expr,
+        sub_rule: SubRule,
+        delimiters: &[Token],
+        folder: Folder,
+    ) -> Result<Expr>
+    where
+        Token: Into<Option<Oper>>,
+        SubRule: Fn(&mut Self) -> Result<Expr>,
+        Folder: Fn(Expr, Oper, Expr) -> Result<Expr>,
+    {
+        let mut expr = left;
+        while let Some(token) = self.consume_any_of(delimiters) {
+            let right = sub_rule(self)?;
+            let oper = token.into().unwrap();
+            expr = folder(expr, oper, right)?;
+        }
+        return Ok(expr);
+    }
+
     pub fn parse_expr(&mut self) -> Result<Expr> {
-        self.expr_equality()
+        self.assignment()
+    }
+
+    /// exprStmt → IDENTIFIER "=" assignment
+    ///          | equality ;
+    fn assignment(&mut self) -> Result<Expr> {
+        let expr = self.expr_equality()?;
+        // may be assignment (or semicolon must exist)
+        if self.try_peek()?.token == Token::Equal {
+            // previous `Expr` must be assignable (`Expr::Variable`)
+            let name = match expr {
+                Expr::Variable(ref name) => name,
+                e => return Err(ParseError::NotAssignable(e)),
+            };
+            // right recursive parsing
+            self.advance(); // =
+            let right = self.assignment()?;
+            Ok(Expr::Assign(Box::new(AssignArgs {
+                name: name.clone(),
+                expr: right,
+            })))
+        } else {
+            Ok(expr)
+        }
     }
 
     /// equality → comparison ( ( "!=" | "==" ) comparison )* ;
@@ -428,7 +479,7 @@ where
     /// To be called after consuming "(" (predictive parsing).
     fn expr_group(&mut self) -> Result<Expr> {
         let expr = self.parse_expr()?;
-        self.try_advance_if_find(&[Token::RightParen])?;
+        self.try_consume_any_of(&[Token::RightParen])?;
         Ok(expr)
     }
 }

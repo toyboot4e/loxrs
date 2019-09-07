@@ -26,8 +26,8 @@ pub enum Token {
     Less,
     LessEqual,
 
-    // literals
     Identifier(Identifier),
+    // literals
     String(String),
     Number(f64),
 

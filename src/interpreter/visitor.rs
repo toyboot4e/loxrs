@@ -17,6 +17,7 @@ pub trait ExprVisitor<T> {
             Logic(args) => self.visit_logic_expr(args.as_ref()),
             Grouping(args) => self.visit_expr(&args.expr),
             Variable(name) => self.visit_var_expr(name),
+            Assign(args) => self.visit_assign_expr(args.as_ref()),
         }
     }
     fn visit_literal_expr(&mut self, literal: &LiteralArgs) -> T;
@@ -24,6 +25,7 @@ pub trait ExprVisitor<T> {
     fn visit_binary_expr(&mut self, binary: &BinaryArgs) -> T;
     fn visit_logic_expr(&mut self, logic: &LogicArgs) -> T;
     fn visit_var_expr(&mut self, name: &str) -> T;
+    fn visit_assign_expr(&mut self, assign: &AssignArgs) -> T;
 }
 
 /// Automates double dispatches

@@ -12,6 +12,7 @@ use crate::interpreter::obj::LoxObj;
 #[derive(Debug)]
 pub enum RuntimeError {
     MismatchedType,
+    /// Tried to lookup undefined variable
     Undefined(String),
     // TODO: enable overwriting
     DuplicateDefinition(String),
@@ -251,5 +252,13 @@ impl ExprVisitor<Result<LoxObj>> for Interpreter {
             Ok(obj) => Ok(obj.clone()), // FIXME
             Err(_) => Err(RuntimeError::Undefined(name.to_string())),
         }
+    }
+
+    fn visit_assign_expr(&mut self, assign: &AssignArgs) -> Result<LoxObj> {
+        let obj = self.eval_expr(&assign.expr)?;
+        self.env
+            .borrow_mut()
+            .assign(assign.name.as_str(), obj.clone())?;
+        Ok(obj)
     }
 }
