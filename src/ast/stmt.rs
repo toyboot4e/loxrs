@@ -1,4 +1,4 @@
-use crate::abs::expr::Expr;
+use crate::ast::expr::Expr;
 
 // FIXME: where to box
 /// Stmt → expr | if | print | block ;

@@ -1,5 +1,5 @@
-use crate::abs::token::Token;
-use crate::lexer::ParseError;
+use crate::lexer::token::Token;
+use crate::lexer::parser::ParseError;
 use std::convert::From;
 // TODO: benchmark lazy static vs match
 // TODO: combining oper and token or not

@@ -1,6 +1,5 @@
 pub mod expr;
-mod pretty_printer;
 pub mod stmt;
-pub mod token;
+mod pretty_printer;
 
 pub use pretty_printer::PrettyPrint;

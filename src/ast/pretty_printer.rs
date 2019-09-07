@@ -132,8 +132,8 @@ mod test {
     /// Tests this: (* (- 123) (group 45.67))
     #[test]
     fn test_in_part_5() {
-        use crate::abs::expr::*;
-        use crate::abs::pretty_printer::*;
+        use crate::ast::expr::*;
+        use crate::ast::pretty_printer::*;
         println!(
             "{}",
             Expr::binary(
@@ -146,7 +146,7 @@ mod test {
     }
 }
 
-use crate::abs::stmt::*;
+use crate::ast::stmt::*;
 impl PrettyPrint for Stmt {
     fn pretty_print(&self) -> String {
         use Stmt::*;

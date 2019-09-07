@@ -4,8 +4,7 @@ use ::std::rc::Rc;
 use super::env::Env;
 use super::visitor::StmtVisitor;
 
-use crate::abs::expr::*;
-use crate::abs::stmt::*;
+use crate::ast::{expr::*, stmt::*};
 use crate::runtime::obj::LoxObj;
 
 /// Runtime error when evaluating expressions.
@@ -119,7 +118,7 @@ use LoxObj::Value as ValObj;
 mod logic {
     //! Operator overloading for specific LoxObj_s.
 
-    use crate::abs::expr::*;
+    use crate::ast::expr::*;
     use crate::runtime::obj::LoxObj;
     use std::cmp::Ordering;
     use LiteralArgs as Lit;

@@ -1,11 +1,11 @@
-use crate::abs::token::{SourcePosition, SourceToken, Token};
+use crate::lexer::token::{SourcePosition, SourceToken, Token};
 use std::str::Chars;
 
-/// Hides fields of `ScanState`
 mod hidden {
+    //! Hides fields in `ScanState`
     use ::itertools::{multipeek, MultiPeek};
 
-    use crate::abs::token::SourcePosition;
+    use crate::lexer::token::SourcePosition;
     use std::str::Chars;
 
     pub struct ScanState<I>
