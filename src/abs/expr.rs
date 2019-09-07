@@ -1,6 +1,6 @@
 use crate::abs::token::Token;
+use crate::lexer::ParseError;
 use std::convert::From;
-use crate::walk::ParseError;
 // TODO: benchmark lazy static vs match
 // TODO: combining oper and token or not
 
@@ -57,12 +57,11 @@ impl Expr {
 
     pub fn assign(left: Expr, oper: AssignOper, right: Expr) -> Result<Expr, ParseError> {
         match left {
-            Expr::Variable(ref name) =>
-        Ok(Expr::Assign(Box::new(AssignArgs{
-            name: name.to_string(),
-           expr: right,
-        }))),
-        _ => Err(ParseError::NotAssignable(left)),
+            Expr::Variable(ref name) => Ok(Expr::Assign(Box::new(AssignArgs {
+                name: name.to_string(),
+                expr: right,
+            }))),
+            _ => Err(ParseError::NotAssignable(left)),
         }
     }
 }
@@ -216,6 +215,7 @@ pub struct GroupingArgs {
     pub expr: Expr,
 }
 
+/// Assignment is an expression in AST, but only parsed as an expression statement.
 #[derive(Clone, Debug, PartialEq)]
 pub struct AssignArgs {
     /// Name of the identifier to assign

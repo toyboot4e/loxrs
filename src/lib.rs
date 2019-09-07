@@ -6,12 +6,12 @@
 
 mod abs;
 mod interpreter;
-mod walk;
+mod lexer;
 
 use crate::abs::stmt::Stmt;
 use crate::abs::PrettyPrint;
 use crate::interpreter::Interpreter;
-use crate::walk::{parser::Parser, scanner::Scanner};
+use crate::lexer::{parser::Parser, scanner::Scanner};
 
 use std::fs;
 use std::io::{self, BufRead, BufWriter, Write}; // flush()
