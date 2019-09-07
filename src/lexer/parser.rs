@@ -1,5 +1,4 @@
 use crate::abs::{expr::*, stmt::*, token::*};
-use crate::interpreter::RuntimeError;
 use std::iter::Peekable;
 
 type Result<T> = std::result::Result<T, ParseError>;

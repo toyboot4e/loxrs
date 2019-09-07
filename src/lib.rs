@@ -5,12 +5,12 @@
 #![warn(rust_2018_idioms)]
 
 mod abs;
-mod interpreter;
+mod runtime;
 mod lexer;
 
 use crate::abs::stmt::Stmt;
 use crate::abs::PrettyPrint;
-use crate::interpreter::Interpreter;
+use crate::runtime::Interpreter;
 use crate::lexer::{parser::Parser, scanner::Scanner};
 
 use std::fs;
