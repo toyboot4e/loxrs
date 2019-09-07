@@ -12,6 +12,7 @@ use crate::interpreter::obj::LoxObj;
 #[derive(Debug)]
 pub enum RuntimeError {
     MismatchedType,
+    /// Tried to lookup undefined variable
     Undefined(String),
     // TODO: enable overwriting
     DuplicateDefinition(String),
@@ -59,13 +60,13 @@ impl StmtVisitor<Result<()>> for Interpreter {
         Ok(())
     }
 
-    fn visit_print(&mut self, print: &PrintArgs) -> Result<()> {
+    fn visit_print_stmt(&mut self, print: &PrintArgs) -> Result<()> {
         let v = self.eval_expr(&print.expr)?;
         println!("print: {:?}", stringify_obj(&v));
         Ok(())
     }
 
-    fn visit_var_dec(&mut self, var: &VarDecArgs) -> Result<()> {
+    fn visit_var_dec_stmt(&mut self, var: &VarDecArgs) -> Result<()> {
         let name = &var.name;
         let obj = self.eval_expr(&var.init)?;
         println!("var_dec: {:?} = {:?}", name, &obj);
@@ -73,7 +74,17 @@ impl StmtVisitor<Result<()>> for Interpreter {
         Ok(())
     }
 
-    fn visit_block(&mut self, block: &[Stmt]) -> Result<()> {
+    fn visit_if_stmt(&mut self, if_: &IfArgs) -> Result<()> {
+        if self.eval_expr(&if_.condition)?.is_truthy() {
+            self.interpret(&if_.if_true)
+        } else if let Some(if_false) = if_.if_false.as_ref() {
+            self.interpret(if_false)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn visit_block_stmt(&mut self, block: &[Stmt]) -> Result<()> {
         let prev = Rc::clone(&self.env);
         self.env = Rc::new(RefCell::new(Env::from_parent(&prev)));
         if let Some(err_result) = block.iter().map(|x| self.interpret(x)).find(|x| x.is_err()) {
@@ -168,11 +179,11 @@ use ::std::cmp::Ordering;
 
 /// Visitors for implementing `eval_expr`
 impl ExprVisitor<Result<LoxObj>> for Interpreter {
-    fn visit_literal(&mut self, literal: &LiteralArgs) -> Result<LoxObj> {
+    fn visit_literal_expr(&mut self, literal: &LiteralArgs) -> Result<LoxObj> {
         Ok(ValObj(literal.clone()))
     }
 
-    fn visit_unary(&mut self, unary: &UnaryArgs) -> Result<LoxObj> {
+    fn visit_unary_expr(&mut self, unary: &UnaryArgs) -> Result<LoxObj> {
         let obj = self.visit_expr(&unary.expr)?;
         use UnaryOper::*;
         match &unary.oper {
@@ -180,11 +191,11 @@ impl ExprVisitor<Result<LoxObj>> for Interpreter {
                 let n = obj.as_num().ok_or_else(|| RuntimeError::MismatchedType)?;
                 Ok(LoxObj::Value(Lit::Number(-n)))
             }
-            Not => Ok(LoxObj::bool(obj.is_truthy())),
+            Not => Ok(LoxObj::bool(!obj.is_truthy())),
         }
     }
 
-    fn visit_binary(&mut self, binary: &BinaryArgs) -> Result<LoxObj> {
+    fn visit_binary_expr(&mut self, binary: &BinaryArgs) -> Result<LoxObj> {
         use BinaryOper::*;
         let oper = binary.oper.clone();
 
@@ -225,7 +236,7 @@ impl ExprVisitor<Result<LoxObj>> for Interpreter {
         })
     }
 
-    fn visit_logic(&mut self, unary: &LogicArgs) -> Result<LoxObj> {
+    fn visit_logic_expr(&mut self, unary: &LogicArgs) -> Result<LoxObj> {
         let oper = unary.oper.clone();
         let left_truthy = self.visit_expr(&unary.left)?.is_truthy();
         if left_truthy && oper == LogicOper::Or {
@@ -235,11 +246,19 @@ impl ExprVisitor<Result<LoxObj>> for Interpreter {
         Ok(LoxObj::bool(right_truthy))
     }
 
-    fn visit_var(&mut self, name: &str) -> Result<LoxObj> {
+    fn visit_var_expr(&mut self, name: &str) -> Result<LoxObj> {
         let env = self.env.borrow_mut();
         match env.get(name) {
             Ok(obj) => Ok(obj.clone()), // FIXME
             Err(_) => Err(RuntimeError::Undefined(name.to_string())),
         }
+    }
+
+    fn visit_assign_expr(&mut self, assign: &AssignArgs) -> Result<LoxObj> {
+        let obj = self.eval_expr(&assign.expr)?;
+        self.env
+            .borrow_mut()
+            .assign(assign.name.as_str(), obj.clone())?;
+        Ok(obj)
     }
 }

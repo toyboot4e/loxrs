@@ -9,6 +9,7 @@ mod interpreter;
 mod walk;
 
 use crate::abs::stmt::Stmt;
+use crate::abs::PrettyPrint;
 use crate::interpreter::Interpreter;
 use crate::walk::{parser::Parser, scanner::Scanner};
 
@@ -24,23 +25,36 @@ pub fn run_file(path: &str) {
         }
         Ok(s) => s,
     };
+
     let (tokens, scan_errors) = Scanner::new(&source).scan();
-    self::print_all("====== scan errors =====", &scan_errors);
-    self::print_all("====== tokens =====", &tokens);
+    self::print_all_debug("====== scan errors =====", scan_errors);
+    self::print_all_debug("====== tokens =====", &tokens);
+
     let (mut stmts, parse_errors) = Parser::new(&tokens).parse();
-    self::print_all("===== parse errors =====", &parse_errors);
+    self::print_all_debug("===== parse errors =====", &parse_errors);
+    self::print_all_display("===== AST =====", stmts.iter().map(|s| s.pretty_print()));
+
     self::interpret(&mut stmts);
 }
 
-fn print_all<T>(description: &str, items: &[T])
-where
-    T: std::fmt::Debug,
+fn print_all_debug(description: &str, items: impl IntoIterator<Item=impl ::std::fmt::Debug>)
 {
     let out = io::stdout();
     let mut out = BufWriter::new(out.lock());
     writeln!(out, "{}", description).unwrap();
     for i in items {
         writeln!(out, "{:?}", i).unwrap();
+    }
+    writeln!(out).unwrap();
+}
+
+fn print_all_display(description: &str, items: impl IntoIterator<Item=impl ::std::fmt::Display>)
+{
+    let out = io::stdout();
+    let mut out = BufWriter::new(out.lock());
+    writeln!(out, "{}", description).unwrap();
+    for i in items {
+        writeln!(out, "{}", i).unwrap();
     }
     writeln!(out).unwrap();
 }
@@ -81,7 +95,7 @@ pub fn interpret(stmts: &mut [Stmt]) {
         .find(|x| x.is_err())
     {
         Some(err) => {
-            println!("====== runtime errors =====");
+            println!("\n====== runtime errors =====");
             println!("{:?}", err);
         }
         None => {}

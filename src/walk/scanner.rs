@@ -219,7 +219,13 @@ impl<'a> Scanner<'a> {
             '-' => Ok(Minus),
             ';' => Ok(Semicolon),
             '*' => Ok(Star),
-            '!' => self.scan_operator('=', BangEqual, Bang),
+            '!' => Ok(match self.state.peek() {
+                Some('=') => {
+                    self.state.next();
+                    BangEqual
+                }
+                _ => Bang // we do not consume the character found
+            }),
             '=' => self.scan_operator('=', EqualEqual, Equal),
             '<' => self.scan_operator('=', LessEqual, Less),
             '>' => self.scan_operator('=', GreaterEqual, Greater),

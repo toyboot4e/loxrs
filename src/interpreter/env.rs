@@ -51,15 +51,15 @@ impl Env {
 
     pub fn assign(&mut self, name: &str, obj: LoxObj) -> Result<()> {
         let mut map = self.map.borrow_mut();
-        match map.contains_key(name) {
-            true => {
-                map.insert(name.to_owned(), obj);
-                Ok(())
-            }
-            false => match self.parent.upgrade() {
+        if map.contains_key(name) {
+            println!("assingn {:?}", &obj);
+            map.insert(name.to_owned(), obj);
+            Ok(())
+        } else {
+            match self.parent.upgrade() {
                 Some(rc) => rc.borrow_mut().assign(name, obj),
                 None => Err(RuntimeError::Undefined(name.to_string())),
-            },
+            }
         }
     }
 }

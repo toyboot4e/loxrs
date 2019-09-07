@@ -8,9 +8,8 @@ use crate::abs::expr::*;
 ///         | IDENTIFIER ;
 #[derive(Clone, Debug, PartialEq)]
 pub enum LoxObj {
-    // TODO: literal -> value
+    // TODO: make value type
     Value(LiteralArgs),
-    // Literal(LiteralArgs),
     // Variable(String),
 }
 

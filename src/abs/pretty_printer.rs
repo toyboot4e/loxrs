@@ -1,3 +1,6 @@
+//! Pretty prints expression
+//!
+// TODO: use ::std::fmt::Display
 use super::expr::*;
 
 pub trait PrettyPrint {
@@ -13,7 +16,8 @@ impl PrettyPrint for Expr {
             Binary(ref b) => b.pretty_print(),
             Logic(ref b) => b.pretty_print(),
             Grouping(ref expr) => expr.pretty_print(),
-            Variable(ref name) => format!("var: {}", name),
+            Variable(ref name) => format!("(var {})", name),
+            Assign(ref a) => a.pretty_print(),
         }
     }
 }
@@ -117,6 +121,12 @@ impl PrettyPrint for GroupingArgs {
     }
 }
 
+impl PrettyPrint for AssignArgs {
+    fn pretty_print(&self) -> String {
+        format!("(assign \"{}\" {})", self.name, self.expr.pretty_print())
+    }
+}
+
 #[cfg(test)]
 mod test {
     /// Tests this: (* (- 123) (group 45.67))
@@ -133,5 +143,34 @@ mod test {
             )
             .pretty_print()
         );
+    }
+}
+
+use crate::abs::stmt::*;
+impl PrettyPrint for Stmt {
+    fn pretty_print(&self) -> String {
+        use Stmt::*;
+        match *self {
+            Expr(ref expr) => format!("(expr {})", expr.pretty_print()),
+            Print(ref print) => format!("(print {})", print.expr.pretty_print()),
+            Var(ref var) => format!("(var {} {})", var.name, var.init.pretty_print()),
+            If(ref if_) => format!(
+                "(if ({}) {} {})",
+                if_.condition.pretty_print(),
+                if_.if_true.pretty_print(),
+                match if_.if_false {
+                    Some(ref stmt) => stmt.pretty_print(),
+                    None => "None".to_string(),
+                }
+            ),
+            Block(ref stmts) => format!(
+                "(block {})",
+                stmts
+                    .iter()
+                    .map(|s| s.pretty_print())
+                    .collect::<Vec<String>>()
+                    .join("\n  ")
+            ),
+        }
     }
 }

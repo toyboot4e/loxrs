@@ -26,8 +26,8 @@ pub enum Token {
     Less,
     LessEqual,
 
-    // literals
     Identifier(Identifier),
+    // literals
     String(String),
     Number(f64),
 
@@ -92,8 +92,8 @@ impl SourcePosition {
 }
 
 /// [`Token`] in source code. Often referred to as `s_token`
-#[derive(Debug)]
 pub struct SourceToken {
+    // TODO: rename to kind
     pub token: Token,
     pub pos: SourcePosition,
     pub lexeme: String,
@@ -107,5 +107,16 @@ impl SourceToken {
             // Required?
             lexeme: lexeme,
         }
+    }
+}
+
+use ::std::fmt::{Debug, Formatter, Result};
+impl Debug for SourceToken {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        write!(
+            f,
+            r##"{:3}:{:3}  {:?} ["{}"]"##,
+            self.pos.line, self.pos.column, self.token, self.lexeme
+        )
     }
 }
