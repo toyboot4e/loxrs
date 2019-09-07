@@ -6,7 +6,7 @@ use super::visitor::StmtVisitor;
 
 use crate::abs::expr::*;
 use crate::abs::stmt::*;
-use crate::interpreter::obj::LoxObj;
+use crate::runtime::obj::LoxObj;
 
 /// Runtime error when evaluating expressions.
 #[derive(Debug)]
@@ -120,7 +120,7 @@ mod logic {
     //! Operator overloading for specific LoxObj_s.
 
     use crate::abs::expr::*;
-    use crate::interpreter::obj::LoxObj;
+    use crate::runtime::obj::LoxObj;
     use std::cmp::Ordering;
     use LiteralArgs as Lit;
 
@@ -174,7 +174,7 @@ mod logic {
     }
 }
 
-use crate::interpreter::visitor::ExprVisitor;
+use crate::runtime::visitor::ExprVisitor;
 use ::std::cmp::Ordering;
 
 /// Visitors for implementing `eval_expr`

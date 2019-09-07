@@ -1,5 +1,5 @@
-use crate::interpreter::interpreter::RuntimeError;
-use crate::interpreter::obj::LoxObj;
+use crate::runtime::interpreter::RuntimeError;
+use crate::runtime::obj::LoxObj;
 use ::std::cell::RefCell;
 use ::std::collections::HashMap;
 use ::std::rc::{Rc, Weak};
