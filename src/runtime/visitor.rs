@@ -1,8 +1,7 @@
 /// Automates double dispatches reducing `switch`
 ///
 use super::obj::LoxObj;
-use crate::abs::expr::*;
-use crate::abs::stmt::*;
+use crate::ast::{expr::*, stmt::*};
 
 /// Automates double dispatches reducing `switch`
 pub trait ExprVisitor<T> {

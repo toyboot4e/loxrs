@@ -4,12 +4,12 @@
 #![allow(unused_variables)]
 #![warn(rust_2018_idioms)]
 
-mod abs;
+mod ast;
 mod runtime;
 mod lexer;
 
-use crate::abs::stmt::Stmt;
-use crate::abs::PrettyPrint;
+use crate::ast::stmt::Stmt;
+use crate::ast::PrettyPrint;
 use crate::runtime::Interpreter;
 use crate::lexer::{parser::Parser, scanner::Scanner};
 
