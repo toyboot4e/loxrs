@@ -42,7 +42,7 @@ impl Env {
 
     pub fn define(&mut self, name: &str, obj: LoxObj) -> Result<()> {
         if self.map.borrow().contains_key(name) {
-            Err(RuntimeError::DuplicateDefinition(name.to_string()))
+            Err(RuntimeError::DuplicateDeclaration(name.to_string()))
         } else {
             self.map.borrow_mut().insert(name.to_owned(), obj);
             Ok(())

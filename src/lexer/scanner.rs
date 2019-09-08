@@ -171,6 +171,7 @@ impl<'a> Scanner<'a> {
         }
     }
 
+    // FIXME: lexemes are not always necessary
     fn add_context(&mut self, token: Token, pos: SourcePosition) -> SourceToken {
         SourceToken::new(token, pos, self.state.lexeme().to_string())
     }
@@ -198,9 +199,11 @@ impl<'a> Scanner<'a> {
         return (tokens, errors);
     }
 
-    /// Returns None for tokens to be discarded.
+    /// EoF is `Some(Ok(Token::EoF))`. Returns None for tokens to be discarded
     fn scan_token(&mut self) -> Option<Result<Token>> {
         use Token::*;
+        // TODO: reduce unncessary lexemes for tokens
+        // TODO: more efficient lexeme usage
         self.state.clear_lexeme();
 
         let c = match self.state.next() {
@@ -208,7 +211,8 @@ impl<'a> Scanner<'a> {
             Some(x) => x,
         };
 
-        let _result = match c {
+        Some(match c {
+            // single
             '(' => Ok(LeftParen),
             ')' => Ok(RightParen),
             '{' => Ok(LeftBrace),
@@ -219,44 +223,53 @@ impl<'a> Scanner<'a> {
             '-' => Ok(Minus),
             ';' => Ok(Semicolon),
             '*' => Ok(Star),
-            '!' => Ok(match self.state.peek() {
-                Some('=') => {
-                    self.state.next();
-                    BangEqual
-                }
-                _ => Bang // we do not consume the character found
-            }),
-            '=' => self.scan_operator('=', EqualEqual, Equal),
-            '<' => self.scan_operator('=', LessEqual, Less),
-            '>' => self.scan_operator('=', GreaterEqual, Greater),
-            '/' => {
-                if self.state.consume_char('/') {
-                    self.state.advance_until(|c| c == '\n');
-                    return if self.state.peek().is_some() {
-                        None
-                    } else {
-                        Some(Ok(Eof))
-                    };
-                } else {
-                    Ok(Slash)
-                }
-            }
-            // skip_while
+            // comparison
+            '!' => self.scan_cmp('=', BangEqual, Bang),
+            '=' => self.scan_cmp('=', EqualEqual, Equal),
+            '<' => self.scan_cmp('=', LessEqual, Less),
+            '>' => self.scan_cmp('=', GreaterEqual, Greater),
+            // commenting or division
+            '/' => return self.scan_slash(),
+            // logic
+            '|' => self.scan_logic('|', Or),
+            '&' => self.scan_logic('&', And),
+            // FIXME: use goto not `return`
             ' ' | '\r' | '\t' | '\n' => return None,
+            // literals
             '"' => self.scan_string(),
             c if char_ext::is_digit(c) => self.scan_number(),
             c if char_ext::is_alpha(c) => self.scan_identifier(),
+            // else
             _ => Err(ScanError::UnexpectedCharacter(c, self.state.pos())),
-        };
-
-        return Some(_result);
+        })
     }
 
-    fn scan_operator(&mut self, expected: char, if_true: Token, if_false: Token) -> Result<Token> {
+    fn scan_cmp(&mut self, expected: char, if_true: Token, if_false: Token) -> Result<Token> {
         self.state
             .next()
             .map(|c| if c == expected { if_true } else { if_false })
             .ok_or_else(|| ScanError::UnexpectedEof(self.state.pos()))
+    }
+
+    fn scan_logic(&mut self, expected: char, if_true: Token) -> Result<Token> {
+        match self.state.next() {
+            Some(c) if c == expected => Ok(if_true),
+            Some(c) => Err(ScanError::UnexpectedCharacter(c, self.state.pos())),
+            None => Err(ScanError::UnexpectedEof(self.state.pos())),
+        }
+    }
+
+    fn scan_slash(&mut self) -> Option<Result<Token>> {
+        if self.state.consume_char('/') {
+            self.state.advance_until(|c| c == '\n');
+            return if self.state.peek().is_some() {
+                None
+            } else {
+                Some(Ok(Token::Eof))
+            };
+        } else {
+            Some(Ok(Token::Slash))
+        }
     }
 
     // TODO: enable rich enclosure such as ###"

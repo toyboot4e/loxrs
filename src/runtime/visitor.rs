@@ -1,6 +1,5 @@
-/// Automates double dispatches reducing `switch`
-///
-use super::obj::LoxObj;
+//! Automates double dispatches reducing `switch`
+
 use crate::ast::{expr::*, stmt::*};
 
 /// Automates double dispatches reducing `switch`
