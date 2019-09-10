@@ -212,7 +212,7 @@ impl<'a> Scanner<'a> {
         };
 
         Some(match c {
-            // single
+            // single character token
             '(' => Ok(LeftParen),
             ')' => Ok(RightParen),
             '{' => Ok(LeftBrace),
@@ -238,6 +238,7 @@ impl<'a> Scanner<'a> {
             // literals
             '"' => self.scan_string(),
             c if char_ext::is_digit(c) => self.scan_number(),
+            // identifier or multi character token
             c if char_ext::is_alpha(c) => self.scan_identifier(),
             // else
             _ => Err(ScanError::UnexpectedCharacter(c, self.state.pos())),

@@ -51,7 +51,6 @@ fn stringify_obj(obj: &LoxObj) -> String {
     }
 }
 
-// interprete functions
 impl StmtVisitor<Result<()>> for Interpreter {
     fn visit_expr_stmt(&mut self, expr: &Expr) -> Result<()> {
         let v = self.eval_expr(expr)?;
@@ -83,16 +82,23 @@ impl StmtVisitor<Result<()>> for Interpreter {
         }
     }
 
-    fn visit_block_stmt(&mut self, block: &[Stmt]) -> Result<()> {
+    fn visit_block_stmt(&mut self, block: &BlockArgs) -> Result<()> {
         let prev = Rc::clone(&self.env);
         self.env = Rc::new(RefCell::new(Env::from_parent(&prev)));
-        if let Some(err_result) = block.iter().map(|x| self.interpret(x)).find(|x| x.is_err()) {
+        if let Some(err_result) = block.stmts.iter().map(|x| self.interpret(x)).find(|x| x.is_err()) {
             self.env = prev;
             err_result
         } else {
             self.env = prev;
             Ok(())
         }
+    }
+
+    fn visit_while_stmt(&mut self, while_: &WhileArgs) -> Result<()> {
+        while self.eval_expr(&while_.condition)?.is_truthy() {
+            self.visit_block_stmt(&while_.block)?;
+        }
+        Ok(())
     }
 }
 

@@ -10,7 +10,8 @@ pub enum Stmt {
     Print(PrintArgs),
     Var(VarDecArgs),
     If(Box<IfArgs>),
-    Block(Vec<Stmt>),
+    While(WhileArgs),
+    Block(BlockArgs),
 }
 
 impl Stmt {
@@ -32,6 +33,23 @@ impl Stmt {
             if_true: then,
             if_false: else_,
         }))
+    }
+
+    pub fn block(stmts: Vec<Stmt>) -> Self {
+        Stmt::Block(
+            BlockArgs {
+                stmts: stmts,
+            }
+        )
+    }
+
+    pub fn while_(condition: Expr, block: BlockArgs) -> Self {
+        Stmt::While(
+            WhileArgs {
+                condition: condition,
+                block: block
+            }
+        )
     }
 }
 
@@ -76,4 +94,21 @@ impl VarDecArgs {
             init: init,
         }
     }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct BlockArgs {
+    pub stmts: Vec<Stmt>,
+}
+
+impl BlockArgs {
+    pub fn into_stmt(self) -> Stmt {
+        Stmt::Block(self)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct WhileArgs {
+    pub condition: Expr,
+    pub block: BlockArgs,
 }

@@ -223,7 +223,7 @@ where
         }
     }
 
-    /// statement → exprStmt | printStmt | block ;
+    /// statement → exprStmt | printStmt | whileStmt | block ;
     ///
     /// Note that sub rules don't consume unexpected tokens.
     pub fn parse_stmt(&mut self) -> Result<Stmt> {
@@ -235,24 +235,28 @@ where
             }
             LeftBrace => {
                 self.next();
-                self.stmt_block()
+                Ok(self.stmt_block()?.into_stmt())
             }
             If => {
                 self.next();
                 self.stmt_if()
+            }
+            While => {
+                self.next();
+                self.stmt_while()
             }
             _ => self.stmt_expr(),
         }
     }
 
     /// block → "{" declaration* "}" ;
-    pub fn stmt_block(&mut self) -> Result<Stmt> {
+    pub fn stmt_block(&mut self) -> Result<BlockArgs> {
         let mut stmts = Vec::new();
         loop {
             match self.try_peek()?.token {
                 Token::RightBrace => {
                     self.advance();
-                    return Ok(Stmt::Block(stmts));
+                    break;
                 }
                 _ => {
                     let stmt = self
@@ -262,6 +266,15 @@ where
                 }
             };
         }
+        Ok(BlockArgs { stmts: stmts })
+    }
+
+    /// while → "while" expr block
+    pub fn stmt_while(&mut self) -> Result<Stmt> {
+        let condition = self.parse_expr()?;
+        self.try_consume_any_of(&[Token::LeftBrace])?;
+        let block = self.stmt_block()?;
+        Ok(Stmt::while_(condition, block))
     }
 
     /// printStmt → "print" expression ";" ;
@@ -278,7 +291,7 @@ where
     pub fn stmt_if(&mut self) -> Result<Stmt> {
         let condition = self.parse_expr()?;
         self.try_consume_any_of(&[Token::LeftBrace])?;
-        let if_true = self.stmt_block()?;
+        let if_true = self.stmt_block()?.into_stmt();
         let if_false = self._else_recursive()?;
         Ok(Stmt::if_then_else(condition, if_true, if_false))
     }
@@ -298,7 +311,7 @@ where
                     // else
                     s_token if s_token.token == Token::LeftBrace => {
                         self.advance();
-                        let else_ = self.stmt_block()?;
+                        let else_ = self.stmt_block()?.into_stmt();
                         Ok(Some(else_))
                     }
                     // else <unexpected>
