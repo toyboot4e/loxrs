@@ -147,6 +147,18 @@ mod test {
 }
 
 use crate::ast::stmt::*;
+
+impl PrettyPrint for BlockArgs {
+    fn pretty_print(&self) -> String {
+                self
+             .stmts
+                    .iter()
+                    .map(|s| s.pretty_print())
+                    .collect::<Vec<String>>()
+                    .join("\n  ")
+    }
+}
+
 impl PrettyPrint for Stmt {
     fn pretty_print(&self) -> String {
         use Stmt::*;
@@ -163,14 +175,20 @@ impl PrettyPrint for Stmt {
                     None => "None".to_string(),
                 }
             ),
-            Block(ref stmts) => format!(
+            Block(ref block) => format!(
                 "(block {})",
-                stmts
+                block
+                    .stmts
                     .iter()
                     .map(|s| s.pretty_print())
                     .collect::<Vec<String>>()
                     .join("\n  ")
             ),
+            While(ref while_) => format!(
+                "(while {} {})",
+                while_.condition.pretty_print(),
+                while_.block.pretty_print(),
+            )
         }
     }
 }

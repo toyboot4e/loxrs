@@ -1,6 +1,5 @@
-/// Automates double dispatches reducing `switch`
-///
-use super::obj::LoxObj;
+//! Automates double dispatches reducing `switch`
+
 use crate::ast::{expr::*, stmt::*};
 
 /// Automates double dispatches reducing `switch`
@@ -37,12 +36,14 @@ pub trait StmtVisitor<T> {
             Print(print) => self.visit_print_stmt(print),
             Var(var) => self.visit_var_dec_stmt(var),
             If(if_) => self.visit_if_stmt(if_),
-            Block(block) => self.visit_block_stmt(block.as_ref()),
+            Block(block) => self.visit_block_stmt(block),
+            While(while_) => self.visit_while_stmt(while_),
         }
     }
     fn visit_var_dec_stmt(&mut self, var: &VarDecArgs) -> T;
     fn visit_expr_stmt(&mut self, expr: &Expr) -> T;
     fn visit_print_stmt(&mut self, print: &PrintArgs) -> T;
     fn visit_if_stmt(&mut self, if_: &IfArgs) -> T;
-    fn visit_block_stmt(&mut self, block: &[Stmt]) -> T;
+    fn visit_block_stmt(&mut self, block: &BlockArgs) -> T;
+    fn visit_while_stmt(&mut self, while_: &WhileArgs) -> T;
 }

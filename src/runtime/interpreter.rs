@@ -14,7 +14,7 @@ pub enum RuntimeError {
     /// Tried to lookup undefined variable
     Undefined(String),
     // TODO: enable overwriting
-    DuplicateDefinition(String),
+    DuplicateDeclaration(String),
 }
 
 type Result<T> = ::std::result::Result<T, RuntimeError>;
@@ -51,7 +51,6 @@ fn stringify_obj(obj: &LoxObj) -> String {
     }
 }
 
-// interprete functions
 impl StmtVisitor<Result<()>> for Interpreter {
     fn visit_expr_stmt(&mut self, expr: &Expr) -> Result<()> {
         let v = self.eval_expr(expr)?;
@@ -83,16 +82,23 @@ impl StmtVisitor<Result<()>> for Interpreter {
         }
     }
 
-    fn visit_block_stmt(&mut self, block: &[Stmt]) -> Result<()> {
+    fn visit_block_stmt(&mut self, block: &BlockArgs) -> Result<()> {
         let prev = Rc::clone(&self.env);
         self.env = Rc::new(RefCell::new(Env::from_parent(&prev)));
-        if let Some(err_result) = block.iter().map(|x| self.interpret(x)).find(|x| x.is_err()) {
+        if let Some(err_result) = block.stmts.iter().map(|x| self.interpret(x)).find(|x| x.is_err()) {
             self.env = prev;
             err_result
         } else {
             self.env = prev;
             Ok(())
         }
+    }
+
+    fn visit_while_stmt(&mut self, while_: &WhileArgs) -> Result<()> {
+        while self.eval_expr(&while_.condition)?.is_truthy() {
+            self.visit_block_stmt(&while_.block)?;
+        }
+        Ok(())
     }
 }
 
@@ -235,14 +241,19 @@ impl ExprVisitor<Result<LoxObj>> for Interpreter {
         })
     }
 
-    fn visit_logic_expr(&mut self, unary: &LogicArgs) -> Result<LoxObj> {
-        let oper = unary.oper.clone();
-        let left_truthy = self.visit_expr(&unary.left)?.is_truthy();
-        if left_truthy && oper == LogicOper::Or {
-            return Ok(LoxObj::bool(true));
-        }
-        let right_truthy = self.visit_expr(&unary.right)?.is_truthy();
-        Ok(LoxObj::bool(right_truthy))
+    fn visit_logic_expr(&mut self, logic: &LogicArgs) -> Result<LoxObj> {
+        let oper = logic.oper.clone();
+        let left_truthy = self.visit_expr(&logic.left)?.is_truthy();
+        Ok(match oper {
+            LogicOper::Or => {
+                if left_truthy {
+                    LoxObj::bool(true)
+                } else {
+                    LoxObj::bool(self.visit_expr(&logic.right)?.is_truthy())
+                }
+            }
+            LogicOper::And => LoxObj::bool(left_truthy && self.visit_expr(&logic.right)?.is_truthy())
+        })
     }
 
     fn visit_var_expr(&mut self, name: &str) -> Result<LoxObj> {

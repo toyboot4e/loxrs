@@ -223,7 +223,7 @@ where
         }
     }
 
-    /// statement → exprStmt | printStmt | block ;
+    /// statement → exprStmt | printStmt | whileStmt | block ;
     ///
     /// Note that sub rules don't consume unexpected tokens.
     pub fn parse_stmt(&mut self) -> Result<Stmt> {
@@ -235,24 +235,28 @@ where
             }
             LeftBrace => {
                 self.next();
-                self.stmt_block()
+                Ok(self.stmt_block()?.into_stmt())
             }
             If => {
                 self.next();
                 self.stmt_if()
+            }
+            While => {
+                self.next();
+                self.stmt_while()
             }
             _ => self.stmt_expr(),
         }
     }
 
     /// block → "{" declaration* "}" ;
-    pub fn stmt_block(&mut self) -> Result<Stmt> {
+    pub fn stmt_block(&mut self) -> Result<BlockArgs> {
         let mut stmts = Vec::new();
         loop {
             match self.try_peek()?.token {
                 Token::RightBrace => {
                     self.advance();
-                    return Ok(Stmt::Block(stmts));
+                    break;
                 }
                 _ => {
                     let stmt = self
@@ -262,6 +266,15 @@ where
                 }
             };
         }
+        Ok(BlockArgs { stmts: stmts })
+    }
+
+    /// while → "while" expr block
+    pub fn stmt_while(&mut self) -> Result<Stmt> {
+        let condition = self.parse_expr()?;
+        self.try_consume_any_of(&[Token::LeftBrace])?;
+        let block = self.stmt_block()?;
+        Ok(Stmt::while_(condition, block))
     }
 
     /// printStmt → "print" expression ";" ;
@@ -278,7 +291,7 @@ where
     pub fn stmt_if(&mut self) -> Result<Stmt> {
         let condition = self.parse_expr()?;
         self.try_consume_any_of(&[Token::LeftBrace])?;
-        let if_true = self.stmt_block()?;
+        let if_true = self.stmt_block()?.into_stmt();
         let if_false = self._else_recursive()?;
         Ok(Stmt::if_then_else(condition, if_true, if_false))
     }
@@ -298,7 +311,7 @@ where
                     // else
                     s_token if s_token.token == Token::LeftBrace => {
                         self.advance();
-                        let else_ = self.stmt_block()?;
+                        let else_ = self.stmt_block()?.into_stmt();
                         Ok(Some(else_))
                     }
                     // else <unexpected>
@@ -374,14 +387,16 @@ where
         return Ok(expr);
     }
 
+    /// expr → assignment
     pub fn parse_expr(&mut self) -> Result<Expr> {
         self.assignment()
     }
 
     /// exprStmt → IDENTIFIER "=" assignment
-    ///          | equality ;
+    ///          | logic_or ;
     fn assignment(&mut self) -> Result<Expr> {
-        let expr = self.expr_equality()?;
+        let expr = self.expr_or()?; // may be an identifier
+
         // may be assignment (or semicolon must exist)
         if self.try_peek()?.token == Token::Equal {
             // previous `Expr` must be assignable (`Expr::Variable`)
@@ -401,34 +416,40 @@ where
         }
     }
 
+    /// logic_or → logicAnd ("||" logicAnd)*
+    fn expr_or(&mut self) -> Result<Expr> {
+        self.rrp(&Self::expr_and, &[Token::Or], &Expr::logic)
+    }
+
+    /// logic_and → equality (&& equality)*
+    fn expr_and(&mut self) -> Result<Expr> {
+        self.rrp(&Self::expr_equality, &[Token::And], &Expr::logic)
+    }
+
     /// equality → comparison ( ( "!=" | "==" ) comparison )* ;
     fn expr_equality(&mut self) -> Result<Expr> {
         use Token::*;
-        self.rrp(
-            &Self::expr_comparison,
-            &[EqualEqual, BangEqual],
-            &Expr::binary,
-        )
+        self.rrp(&Self::expr_cmp, &[EqualEqual, BangEqual], &Expr::binary)
     }
 
     /// comparison → addition ( ( ">" | ">=" | "<" | "<=" ) addition )* ;
-    fn expr_comparison(&mut self) -> Result<Expr> {
+    fn expr_cmp(&mut self) -> Result<Expr> {
         use Token::*;
         self.rrp(
-            &Self::expr_addition,
+            &Self::expr_add,
             &[Greater, GreaterEqual, Less, LessEqual],
             &Expr::binary,
         )
     }
 
     /// addition → multiplication ( ( "-" | "+" ) multiplication )* ;
-    fn expr_addition(&mut self) -> Result<Expr> {
+    fn expr_add(&mut self) -> Result<Expr> {
         use Token::*;
-        self.rrp(&Self::expr_multiplication, &[Plus, Minus], &Expr::binary)
+        self.rrp(&Self::expr_mul, &[Plus, Minus], &Expr::binary)
     }
 
     /// multiplication → unary ( ( "/" | "*" ) unary )* ;
-    fn expr_multiplication(&mut self) -> Result<Expr> {
+    fn expr_mul(&mut self) -> Result<Expr> {
         use Token::*;
         self.rrp(&Self::expr_unary, &[Slash, Star], &Expr::binary)
     }
@@ -445,7 +466,7 @@ where
                 self.advance();
                 Ok(Expr::unary(UnaryOper::Not, self.expr_unary()?))
             }
-            _ => self.expr_primary(),
+            _ => self.expr_prim(),
         }
     }
 
@@ -455,7 +476,7 @@ where
     /// group   → "(" expression ")" ;
     ///
     /// Make sure that there exists next token (predictive parsing).
-    fn expr_primary(&mut self) -> Result<Expr> {
+    fn expr_prim(&mut self) -> Result<Expr> {
         let s_token = self.try_advance()?;
         if let Some(literal) = LiteralArgs::from_token(&s_token.token) {
             return Ok(literal.into());

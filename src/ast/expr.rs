@@ -1,11 +1,7 @@
-use crate::lexer::token::Token;
 use crate::lexer::parser::ParseError;
+use crate::lexer::token::Token;
 use std::convert::From;
-// TODO: benchmark lazy static vs match
-// TODO: combining oper and token or not
 
-// FIXME: where to box
-// specific subtypes are always needed for the pretty printer.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expr {
     Literal(LiteralArgs),
@@ -186,6 +182,7 @@ impl From<Token> for Option<BinaryOper> {
     }
 }
 
+/// `&&` or `||`
 #[derive(Clone, Debug, PartialEq)]
 pub struct LogicArgs {
     pub left: Expr,
@@ -210,12 +207,13 @@ impl From<Token> for Option<LogicOper> {
     }
 }
 
+/// `()`
 #[derive(Clone, Debug, PartialEq)]
 pub struct GroupingArgs {
     pub expr: Expr,
 }
 
-/// Assignment is an expression in AST, but only parsed as an expression statement.
+/// `=`,  only parsed as an expression statement.
 #[derive(Clone, Debug, PartialEq)]
 pub struct AssignArgs {
     /// Name of the identifier to assign
