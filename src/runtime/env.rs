@@ -52,7 +52,6 @@ impl Env {
     pub fn assign(&mut self, name: &str, obj: LoxObj) -> Result<()> {
         let mut map = self.map.borrow_mut();
         if map.contains_key(name) {
-            println!("assingn {:?}", &obj);
             map.insert(name.to_owned(), obj);
             Ok(())
         } else {

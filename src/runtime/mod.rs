@@ -1,6 +1,6 @@
 mod env;
 mod interpreter;
-mod obj;
+pub mod obj;
 mod visitor;
 
 pub use interpreter::{Interpreter, RuntimeError};

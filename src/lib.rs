@@ -86,15 +86,19 @@ pub fn run_repl() {
 
 pub fn interpret(stmts: &mut [Stmt]) {
     let mut interpreter = Interpreter::new();
-    // println!("====== interruptions =====");
+    println!("====== interruptions =====");
     match stmts
         .iter()
-        .map(|x| interpreter.interpret(x))
-        .find(|x| x.is_err())
+        // .map(|x| interpreter.interpret(x))
+        // .find(|x| x.is_err())
+        .enumerate()
+        .map(|(i, stmt)| (i, interpreter.interpret(stmt)))
+        .find(|(i, result)| result.is_err())
     {
-        Some(err) => {
-            println!("====== runtime errors =====");
-            println!("{:?}", err);
+        // Some(err) => {
+        Some((i, err)) => {
+            println!("\n====== runtime errors =====");
+            println!("at {}, {:?}", i, err);
         }
         None => {}
     }

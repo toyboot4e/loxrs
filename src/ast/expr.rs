@@ -80,7 +80,7 @@ impl From<LiteralArgs> for Expr {
 pub enum LiteralArgs {
     Nil,
     Bool(bool),
-    StringL(String),
+    StringLit(String),
     Number(f64),
 }
 
@@ -91,7 +91,7 @@ impl LiteralArgs {
             Nil => LiteralArgs::Nil,
             True => LiteralArgs::Bool(true),
             False => LiteralArgs::Bool(false),
-            String(ref s) => LiteralArgs::StringL(s.clone()),
+            String(ref s) => LiteralArgs::StringLit(s.clone()),
             Number(n) => LiteralArgs::Number(n.clone()),
             _ => return None,
         })
@@ -107,7 +107,7 @@ impl From<f64> for LiteralArgs {
 
 impl From<String> for LiteralArgs {
     fn from(item: String) -> Self {
-        LiteralArgs::StringL(item)
+        LiteralArgs::StringLit(item)
     }
 }
 

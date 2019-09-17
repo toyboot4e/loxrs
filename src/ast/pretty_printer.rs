@@ -1,7 +1,9 @@
 //! Pretty prints expression
-//!
+
 // TODO: use ::std::fmt::Display
-use super::expr::*;
+
+use crate::ast::expr::*;
+use crate::runtime::obj::{LoxFn, LoxObj, LoxValue};
 
 pub trait PrettyPrint {
     fn pretty_print(&self) -> String;
@@ -78,7 +80,7 @@ impl PrettyPrint for LiteralArgs {
                     "false".into()
                 }
             }
-            StringL(ref s) => s.clone(),
+            StringLit(ref s) => s.clone(),
             Number(n) => n.to_string(),
         }
     }
@@ -207,5 +209,38 @@ impl PrettyPrint for Stmt {
                 while_.block.pretty_print(),
             ),
         }
+    }
+}
+
+impl PrettyPrint for LoxValue {
+    fn pretty_print(&self) -> String {
+        match *self {
+            LoxValue::Nil => "Nil".into(),
+            LoxValue::Bool(b) => {
+                if b {
+                    "true".into()
+                } else {
+                    "false".into()
+                }
+            }
+            LoxValue::StringLit(ref s) => s.clone(),
+            LoxValue::Number(n) => n.to_string(),
+        }
+    }
+}
+
+impl PrettyPrint for LoxObj {
+    fn pretty_print(&self) -> String {
+        match self {
+            LoxObj::Value(value) => value.pretty_print(),
+            LoxObj::Callable(call) => call.pretty_print(),
+            LoxObj::Variable(var) => format!("(var {})", var),
+        }
+    }
+}
+
+impl PrettyPrint for LoxFn {
+    fn pretty_print(&self) -> String {
+        "(fn)".into()
     }
 }
