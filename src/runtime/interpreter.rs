@@ -10,6 +10,7 @@ use crate::runtime::obj::LoxObj;
 /// Runtime error when evaluating expressions.
 #[derive(Debug)]
 pub enum RuntimeError {
+    // TODO: use more detailed context
     MismatchedType,
     /// Tried to lookup undefined variable
     Undefined(String),
@@ -54,20 +55,17 @@ fn stringify_obj(obj: &LoxObj) -> String {
 impl StmtVisitor<Result<()>> for Interpreter {
     fn visit_expr_stmt(&mut self, expr: &Expr) -> Result<()> {
         let v = self.eval_expr(expr)?;
-        println!("expr: {:?}", v);
         Ok(())
     }
 
     fn visit_print_stmt(&mut self, print: &PrintArgs) -> Result<()> {
         let v = self.eval_expr(&print.expr)?;
-        println!("print: {:?}", stringify_obj(&v));
         Ok(())
     }
 
     fn visit_var_dec_stmt(&mut self, var: &VarDecArgs) -> Result<()> {
         let name = &var.name;
         let obj = self.eval_expr(&var.init)?;
-        println!("var_dec: {:?} = {:?}", name, &obj);
         self.env.borrow_mut().define(name, obj)?;
         Ok(())
     }
@@ -85,7 +83,12 @@ impl StmtVisitor<Result<()>> for Interpreter {
     fn visit_block_stmt(&mut self, block: &BlockArgs) -> Result<()> {
         let prev = Rc::clone(&self.env);
         self.env = Rc::new(RefCell::new(Env::from_parent(&prev)));
-        if let Some(err_result) = block.stmts.iter().map(|x| self.interpret(x)).find(|x| x.is_err()) {
+        if let Some(err_result) = block
+            .stmts
+            .iter()
+            .map(|x| self.interpret(x))
+            .find(|x| x.is_err())
+        {
             self.env = prev;
             err_result
         } else {
@@ -252,7 +255,9 @@ impl ExprVisitor<Result<LoxObj>> for Interpreter {
                     LoxObj::bool(self.visit_expr(&logic.right)?.is_truthy())
                 }
             }
-            LogicOper::And => LoxObj::bool(left_truthy && self.visit_expr(&logic.right)?.is_truthy())
+            LogicOper::And => {
+                LoxObj::bool(left_truthy && self.visit_expr(&logic.right)?.is_truthy())
+            }
         })
     }
 
@@ -270,5 +275,14 @@ impl ExprVisitor<Result<LoxObj>> for Interpreter {
             .borrow_mut()
             .assign(assign.name.as_str(), obj.clone())?;
         Ok(obj)
+    }
+
+    fn visit_call_expr(&mut self, call: &CallArgs) -> Result<LoxObj> {
+        if let LoxObj::Func(ref f) = self.eval_expr(&call.callee)? {
+            // call
+            unimplemented!()
+        } else {
+            Err(RuntimeError::MismatchedType)
+        }
     }
 }

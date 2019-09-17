@@ -13,13 +13,13 @@ pub enum ParseError {
 }
 
 impl ParseError {
-    pub fn token(found: &SourceToken, expected: &[Token]) -> Self {
+    pub fn unexpected(found: &SourceToken, expected: &[Token]) -> Self {
         ParseError::UnexpectedToken(UnexpectedTokenErrorArgs::from_s_token(found, expected))
     }
 
     pub fn not_beginning_of_stmt(found: &SourceToken) -> Self {
         use Token::*;
-        Self::token(found, &[Print])
+        Self::unexpected(found, &[Print])
     }
 
     pub fn eof() -> Self {
@@ -61,7 +61,7 @@ impl<'a> Parser<'a, std::slice::Iter<'a, SourceToken>> {
     }
 }
 
-/// Iterator implementations
+/// Iterator methods around `Peekable<I>`
 impl<'a, I> Parser<'a, I>
 where
     I: Iterator<Item = &'a SourceToken> + Sized,
@@ -82,13 +82,16 @@ where
         self.peek().ok_or(ParseError::eof())
     }
 
-    fn try_advance(&mut self) -> Result<&SourceToken> {
+    fn try_next(&mut self) -> Result<&SourceToken> {
         self.next().ok_or(ParseError::eof())
     }
 
     /// Just a wrapper around `Iterator::find`.
     fn _find(s_token: &SourceToken, expected: &[Token]) -> Option<Token> {
-        expected.iter().cloned().find(|t| t == &s_token.token)
+        expected
+            .iter()
+            .find(|t| t == &&s_token.token)
+            .map(|t| t.clone())
     }
 
     /// Just a wrapper around `Iterator::any`.
@@ -122,6 +125,22 @@ where
         opt
     }
 
+    /// Safely tries to advance the token iterator
+    fn consume(&mut self, expected: &Token) -> Option<&SourceToken> {
+        match self.peek() {
+            Some(s_token) if s_token.token == *expected => Some(self.next().unwrap()),
+            _ => None,
+        }
+    }
+
+    fn try_consume(&mut self, expected: &Token) -> Result<&SourceToken> {
+        match self.peek() {
+            Some(s_token) if s_token.token == *expected => Ok(self.next().unwrap()),
+            Some(s_token) => Err(ParseError::unexpected(s_token, &[expected.clone()])),
+            None => Err(ParseError::eof()),
+        }
+    }
+
     // FIXME: cannot identify token with fields
     fn consume_any_of(&mut self, expected: &[Token]) -> Option<Token> {
         let opt = Self::_find(self.peek()?, expected);
@@ -134,7 +153,7 @@ where
     /// Just a wrapper of `Iterator::any`. Fails if nothing is found.
     /// Copies a `Token` if it's found.
     fn _try_find(s_token: &SourceToken, expected: &[Token]) -> Result<Token> {
-        Self::_find(s_token, expected).ok_or(ParseError::token(s_token, expected))
+        Self::_find(s_token, expected).ok_or(ParseError::unexpected(s_token, expected))
     }
 
     /// Fails if the peek doesn't match any of expected tokens.
@@ -219,7 +238,10 @@ where
             self.try_consume_any_of(&[Token::Semicolon])?;
             Ok(Stmt::var_dec(name, init))
         } else {
-            Err(ParseError::token(s_token, &[Token::Identifier("".into())]))
+            Err(ParseError::unexpected(
+                s_token,
+                &[Token::Identifier("".into())],
+            ))
         }
     }
 
@@ -315,7 +337,10 @@ where
                         Ok(Some(else_))
                     }
                     // else <unexpected>
-                    s_token => Err(ParseError::token(s_token, &[Token::If, Token::LeftBrace])),
+                    s_token => Err(ParseError::unexpected(
+                        s_token,
+                        &[Token::If, Token::LeftBrace],
+                    )),
                 }
             }
             // EoF or not if-else related token
@@ -361,7 +386,7 @@ where
             let oper = token.into().unwrap();
             expr = folder(expr, oper, right);
         }
-        return Ok(expr);
+        Ok(expr)
     }
 
     /// `Folder` can fail. Left and right rules may be different
@@ -454,7 +479,7 @@ where
         self.rrp(&Self::expr_unary, &[Slash, Star], &Expr::binary)
     }
 
-    /// unary → ( "!" | "-" ) unary | primary ;
+    /// unary → ( "!" | "-" ) unary | primary | call ;
     fn expr_unary(&mut self) -> Result<Expr> {
         use Token::*;
         match self.try_peek()?.token {
@@ -466,7 +491,55 @@ where
                 self.advance();
                 Ok(Expr::unary(UnaryOper::Not, self.expr_unary()?))
             }
-            _ => self.expr_prim(),
+            _ => self.expr_call(),
+        }
+    }
+
+    /// call → primary invoke* ;
+    ///
+    /// invoke → "(" args ")" ;
+    /// args → expr ( "," expr )* ;
+    fn expr_call(&mut self) -> Result<Expr> {
+        let mut expr = self.expr_prim()?;
+        if self.try_peek()?.token != Token::LeftParen {
+            return Ok(expr); // prim
+        }
+
+        // TODO: use right recursive parsing
+        while self.consume(&Token::LeftParen).is_some() {
+            // invoke*
+            let args = if self.try_peek()?.token == Token::RightParen {
+                None
+            } else {
+                Some(self.expr_call_args()?)
+            };
+            self.try_consume(&Token::RightParen)?;
+            expr = Expr::call(expr, args);
+        }
+
+        Ok(expr)
+    }
+
+    /// args → expr ( "," expr )* ;
+    // TODO: use rrp
+    fn expr_call_args(&mut self) -> Result<Args> {
+        let mut args = Args::new();
+        args.push(self.expr_prim()?);
+        loop {
+            match self.try_peek()? {
+                s_token if s_token.token == Token::Comma => {
+                    args.push(self.expr_prim()?);
+                }
+                s_token if s_token.token == Token::RightParen => {
+                    return Ok(args);
+                }
+                s_token => {
+                    return Err(ParseError::unexpected(
+                        s_token,
+                        &[Token::Comma, Token::RightParen],
+                    ));
+                }
+            }
         }
     }
 
@@ -477,7 +550,7 @@ where
     ///
     /// Make sure that there exists next token (predictive parsing).
     fn expr_prim(&mut self) -> Result<Expr> {
-        let s_token = self.try_advance()?;
+        let s_token = self.try_next()?;
         if let Some(literal) = LiteralArgs::from_token(&s_token.token) {
             return Ok(literal.into());
         }
@@ -486,7 +559,7 @@ where
             LeftParen => self.expr_group(),
             Identifier(ref name) => Ok(Expr::var(name)),
             _ => {
-                Err(ParseError::token(
+                Err(ParseError::unexpected(
                     s_token,
                     // TODO: abstract token for literals
                     &[Number(0.0), String("".into()), False, True, Nil, LeftParen],

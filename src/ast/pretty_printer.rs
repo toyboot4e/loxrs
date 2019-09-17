@@ -18,6 +18,7 @@ impl PrettyPrint for Expr {
             Grouping(ref expr) => expr.pretty_print(),
             Variable(ref name) => format!("(var {})", name),
             Assign(ref a) => a.pretty_print(),
+            Call(ref call) => call.pretty_print(),
         }
     }
 }
@@ -127,6 +128,23 @@ impl PrettyPrint for AssignArgs {
     }
 }
 
+impl PrettyPrint for CallArgs {
+    fn pretty_print(&self) -> String {
+        format!(
+            "(call {} {})",
+            self.callee.pretty_print(),
+            match self.args {
+                Some(ref vec) => vec
+                    .iter()
+                    .map(|expr| expr.pretty_print())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                None => "()".to_string(),
+            }
+        )
+    }
+}
+
 #[cfg(test)]
 mod test {
     /// Tests this: (* (- 123) (group 45.67))
@@ -150,12 +168,11 @@ use crate::ast::stmt::*;
 
 impl PrettyPrint for BlockArgs {
     fn pretty_print(&self) -> String {
-                self
-             .stmts
-                    .iter()
-                    .map(|s| s.pretty_print())
-                    .collect::<Vec<String>>()
-                    .join("\n  ")
+        self.stmts
+            .iter()
+            .map(|s| s.pretty_print())
+            .collect::<Vec<String>>()
+            .join("\n  ")
     }
 }
 
@@ -188,7 +205,7 @@ impl PrettyPrint for Stmt {
                 "(while {} {})",
                 while_.condition.pretty_print(),
                 while_.block.pretty_print(),
-            )
+            ),
         }
     }
 }

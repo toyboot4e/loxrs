@@ -11,6 +11,7 @@ pub enum Expr {
     Grouping(Box<GroupingArgs>),
     Variable(String),
     Assign(Box<AssignArgs>),
+    Call(Box<CallArgs>),
 }
 
 /// Helpers for constructing / right recursive parsing
@@ -59,6 +60,13 @@ impl Expr {
             }))),
             _ => Err(ParseError::NotAssignable(left)),
         }
+    }
+
+    pub fn call(callee: Expr, args: Option<Args>) -> Self {
+        Expr::Call(Box::new(CallArgs {
+            callee: callee,
+            args: args
+        }))
     }
 }
 
@@ -235,3 +243,11 @@ impl From<Token> for Option<AssignOper> {
         })
     }
 }
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CallArgs {
+    pub callee: Expr,
+    pub args: Option<Args>,
+}
+
+pub type Args = Vec<Expr>;
