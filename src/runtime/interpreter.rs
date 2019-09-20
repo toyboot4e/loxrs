@@ -4,37 +4,44 @@ use ::std::rc::Rc;
 use super::env::Env;
 use super::visitor::StmtVisitor;
 
-use crate::ast::{expr::*, stmt::*};
-use crate::runtime::obj::{LoxObj, LoxValue};
 use crate::ast::PrettyPrint;
-
-/// Runtime error when evaluating expressions.
-#[derive(Debug)]
-pub enum RuntimeError {
-    // TODO: use more detailed context
-    MismatchedType,
-    /// Tried to lookup undefined variable
-    Undefined(String),
-    // TODO: enable overwriting
-    DuplicateDeclaration(String),
-}
-
-type Result<T> = ::std::result::Result<T, RuntimeError>;
+use crate::ast::{expr::*, stmt::*};
+use crate::runtime::{
+    obj::{LoxFn, LoxObj, LoxValue},
+    Result, RuntimeError,
+};
 
 pub struct Interpreter {
+    globals: Rc<RefCell<Env>>,
     env: Rc<RefCell<Env>>,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
+        let globals = Env::new();
         Self {
+            globals: Rc::new(RefCell::new(globals)),
             env: Rc::new(RefCell::new(Env::new())),
         }
     }
 
-    /// Implemented with Visitor pattern
+    /// Statement interruption with Visitor pattern
     pub fn interpret(&mut self, stmt: &Stmt) -> Result<()> {
         self.visit_stmt(stmt)
+    }
+
+    // TODO: returning variable (using return statement)
+    /// Invokes a given function object
+    pub fn invoke(&mut self, fn_obj: &LoxFn, args: &Args) -> Result<Option<LoxObj>> {
+        let fn_def = match fn_obj {
+            LoxFn::User(ref def) => def,
+            LoxFn::Clock => return Ok(None),
+        };
+        if args.len() != fn_def.params.len() {
+            return Err(RuntimeError::WrongNumberOfArguments);
+        }
+        self.visit_block_stmt(&fn_def.body)?;
+        Ok(None)
     }
 }
 

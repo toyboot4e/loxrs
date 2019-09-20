@@ -1,4 +1,7 @@
+//! Object (value, variable or function) definitions
+
 use crate::ast::expr::*;
+use crate::ast::stmt::BlockArgs;
 
 /// Anything at runtime
 ///
@@ -10,9 +13,11 @@ use crate::ast::expr::*;
 pub enum LoxObj {
     Value(LoxValue),
     Callable(LoxFn),
+    /// An identifier; passive reference to a variable. The instance is gotten from an `Env`.
     Variable(String),
 }
 
+// TODO: use traits and share instances between `LoxObj` & `LiteralArgs`
 #[derive(Clone, Debug, PartialEq)]
 pub enum LoxValue {
     Nil,
@@ -37,19 +42,6 @@ impl From<LoxValue> for LoxObj {
         LoxObj::Value(value)
     }
 }
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct LoxFn {}
-
-impl LoxFn {
-    pub fn arity(&self) -> usize {
-        0
-    }
-}
-
-// pub struct LoxSignature {}
-
-// pub enum ValueArgs {}
 
 impl LoxObj {
     pub fn bool(b: bool) -> Self {
@@ -92,4 +84,19 @@ impl LoxObj {
             _ => false,
         }
     }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum LoxFn {
+    User(FnDef),
+    /// A native function embedded in rulox
+    Clock,
+}
+
+pub type Params = Vec<String>;
+#[derive(Clone, Debug, PartialEq)]
+pub struct FnDef {
+    pub name: String,
+    pub body: BlockArgs,
+    pub params: Params,
 }
