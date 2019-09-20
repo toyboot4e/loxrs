@@ -65,7 +65,7 @@ impl Expr {
     pub fn call(callee: Expr, args: Option<Args>) -> Self {
         Expr::Call(Box::new(CallArgs {
             callee: callee,
-            args: args
+            args: args,
         }))
     }
 }

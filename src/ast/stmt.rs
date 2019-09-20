@@ -36,20 +36,14 @@ impl Stmt {
     }
 
     pub fn block(stmts: Vec<Stmt>) -> Self {
-        Stmt::Block(
-            BlockArgs {
-                stmts: stmts,
-            }
-        )
+        Stmt::Block(BlockArgs { stmts: stmts })
     }
 
     pub fn while_(condition: Expr, block: BlockArgs) -> Self {
-        Stmt::While(
-            WhileArgs {
-                condition: condition,
-                block: block
-            }
-        )
+        Stmt::While(WhileArgs {
+            condition: condition,
+            block: block,
+        })
     }
 }
 
