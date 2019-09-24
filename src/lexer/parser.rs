@@ -256,13 +256,13 @@ where
 
         self.try_consume(&Token::LeftParen)?;
         let params = match self.try_peek()?.token {
-            // TODO: reduce the loss in iteration
+            // TODO: reduce reproducing the token
             Token::Identifier(_) => Some(self.params()?),
             _ => None,
         };
         self.try_consume(&Token::RightParen)?;
 
-        // we must first consume `{` to parse block
+        // we must first consume `{` to parse a block
         self.try_consume(&Token::LeftBrace)?;
         let body = self.stmt_block()?;
 
@@ -373,31 +373,28 @@ where
 
     /// elseRecursive → ("else" "if" block)* ("else" block)?
     fn _else_recursive(&mut self) -> Result<Option<Stmt>> {
-        match self.peek() {
-            Some(s_token) if s_token.token == Token::Else => {
+        if self.consume(&Token::Else).is_none() {
+            return Ok(None);
+        }
+        let s_token = self.try_peek()?;
+        match s_token.token {
+            // else if
+            Token::If => {
                 self.advance();
-                match self.try_peek()? {
-                    // else if
-                    s_token if s_token.token == Token::If => {
-                        self.advance();
-                        let else_if = self.stmt_if()?;
-                        Ok(Some(else_if))
-                    }
-                    // else
-                    s_token if s_token.token == Token::LeftBrace => {
-                        self.advance();
-                        let else_ = self.stmt_block()?.into_stmt();
-                        Ok(Some(else_))
-                    }
-                    // else <unexpected>
-                    s_token => Err(ParseError::unexpected(
-                        s_token,
-                        &[Token::If, Token::LeftBrace],
-                    )),
-                }
+                let else_if = self.stmt_if()?;
+                Ok(Some(else_if))
             }
-            // EoF or not if-else related token
-            _ => Ok(None),
+            // else
+            Token::LeftBrace => {
+                self.advance();
+                let else_ = self.stmt_block()?.into_stmt();
+                Ok(Some(else_))
+            }
+            // error
+            _ => Err(ParseError::unexpected(
+                s_token,
+                &[Token::If, Token::LeftBrace],
+            )),
         }
     }
 
@@ -558,8 +555,8 @@ where
         }
 
         // TODO: use right recursive parsing
+        // invoke*
         while self.consume(&Token::LeftParen).is_some() {
-            // invoke*
             let args = if self.try_peek()?.token == Token::RightParen {
                 None
             } else {
@@ -576,11 +573,11 @@ where
     // TODO: use rrp
     fn expr_call_args(&mut self) -> Result<Args> {
         let mut args = Args::new();
-        args.push(self.expr_prim()?);
+        args.push(self.expr()?);
         loop {
             match self.try_peek()? {
                 s_token if s_token.token == Token::Comma => {
-                    args.push(self.expr_prim()?);
+                    args.push(self.expr()?);
                 }
                 s_token if s_token.token == Token::RightParen => {
                     return Ok(args);

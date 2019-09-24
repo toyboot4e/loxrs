@@ -17,6 +17,13 @@ pub enum LoxObj {
     Variable(String),
 }
 
+impl LoxObj {
+    pub fn f(f: &FnDef) -> Self {
+        // TODO: not to clone when defining a function
+        LoxObj::Callable(LoxFn::User(f.clone()))
+    }
+}
+
 // TODO: use traits and share instances between `LoxObj` & `LiteralArgs`
 #[derive(Clone, Debug, PartialEq)]
 pub enum LoxValue {

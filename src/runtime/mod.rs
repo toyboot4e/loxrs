@@ -1,4 +1,4 @@
-mod env;
+pub mod env;
 mod interpreter;
 pub mod obj;
 mod visitor;

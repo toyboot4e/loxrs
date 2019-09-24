@@ -6,6 +6,7 @@ use ::std::rc::{Rc, Weak};
 type Result<T> = ::std::result::Result<T, RuntimeError>;
 
 pub struct Env {
+    /// Objects; variables or functions
     map: RefCell<HashMap<String, LoxObj>>,
     /// Enclosing environment (if any)
     parent: Weak<RefCell<Self>>,

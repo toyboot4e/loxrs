@@ -45,10 +45,9 @@ impl Interpreter {
         self.visit_stmt(stmt)
     }
 
-    // TODO: returning variable (using return statement)
     /// Invokes a given function object
     pub fn invoke(&mut self, fn_obj: &LoxFn, args: &Option<Args>) -> Result<Option<LoxObj>> {
-        let fn_def = match fn_obj {
+        let def = match fn_obj {
             LoxFn::User(ref def) => def,
             LoxFn::Clock => {
                 let s = self.native_clock(args)?;
@@ -57,11 +56,19 @@ impl Interpreter {
         };
 
         Self::validate_arities(
-            fn_def.params.as_ref().map(|xs| xs.len()),
+            def.params.as_ref().map(|xs| xs.len()),
             args.as_ref().map(|xs| xs.len()),
         )?;
 
-        self.visit_block_stmt(&fn_def.body)?;
+        // FIXME: nesting environments
+        let mut env = Env::from_parent(&self.env);
+        if let (Some(params), Some(args)) = (&def.params, args) {
+            for i in 0..params.len() {
+                env.define(params[i].as_str(), self.eval_expr(&args[i])?)?;
+            }
+        }
+
+        self.visit_block_stmt(&def.body, Some(env))?;
         Ok(None)
     }
 
@@ -104,6 +111,8 @@ fn stringify_obj(obj: &LoxObj) -> String {
     }
 }
 
+/// Executes AST
+///
 /// Statements returns nothing
 impl StmtVisitor<Result<()>> for Interpreter {
     fn visit_expr_stmt(&mut self, expr: &Expr) -> Result<()> {
@@ -118,7 +127,7 @@ impl StmtVisitor<Result<()>> for Interpreter {
         Ok(())
     }
 
-    fn visit_var_dec_stmt(&mut self, var: &VarDecArgs) -> Result<()> {
+    fn visit_var_decl(&mut self, var: &VarDecArgs) -> Result<()> {
         let name = &var.name;
         let obj = self.eval_expr(&var.init)?;
         self.env.borrow_mut().define(name, obj)?;
@@ -135,9 +144,13 @@ impl StmtVisitor<Result<()>> for Interpreter {
         }
     }
 
-    fn visit_block_stmt(&mut self, block: &BlockArgs) -> Result<()> {
+    fn visit_block_stmt(&mut self, block: &BlockArgs, env: Option<Env>) -> Result<()> {
+        let env = env.unwrap_or_else(|| {
+            Env::from_parent(&self.env)
+        });
+
         let prev = Rc::clone(&self.env);
-        self.env = Rc::new(RefCell::new(Env::from_parent(&prev)));
+        self.env = Rc::new(RefCell::new(env));
         if let Some(err_result) = block
             .stmts
             .iter()
@@ -154,13 +167,16 @@ impl StmtVisitor<Result<()>> for Interpreter {
 
     fn visit_while_stmt(&mut self, while_: &WhileArgs) -> Result<()> {
         while self.eval_expr(&while_.condition)?.is_truthy() {
-            self.visit_block_stmt(&while_.block)?;
+            self.visit_block_stmt(&while_.block, None)?;
         }
         Ok(())
     }
 
-    fn visit_fn(&mut self, f: &FnDef) -> Result<()> {
-        unimplemented!()
+    fn visit_fn_decl(&mut self, f: &FnDef) -> Result<()> {
+        self.env
+            .borrow_mut()
+            .define(f.name.as_str(), LoxObj::f(f))?;
+        Ok(())
     }
 }
 
@@ -337,12 +353,9 @@ impl ExprVisitor<Result<LoxObj>> for Interpreter {
     }
 
     fn visit_call_expr(&mut self, call: &CallArgs) -> Result<LoxObj> {
-        if let LoxObj::Callable(ref f) = self.eval_expr(&call.callee)? {
-            // call
-            match f {
-                LoxFn::User(ref def) => unimplemented!(),
-                LoxFn::Clock => self.native_clock(&call.args).map(|v| LoxObj::Value(v)),
-            }
+        if let LoxObj::Callable(ref fn_obj) = self.eval_expr(&call.callee)? {
+            self.invoke(fn_obj, &call.args)?;
+            Ok(LoxObj::Value(LoxValue::Nil))
         } else {
             Err(RuntimeError::MismatchedType)
         }
