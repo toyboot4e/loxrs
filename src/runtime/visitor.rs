@@ -40,6 +40,7 @@ pub trait StmtVisitor<T> {
             If(if_) => self.visit_if_stmt(if_),
             Block(block) => self.visit_block_stmt(block),
             While(while_) => self.visit_while_stmt(while_),
+            Fn(f) => self.visit_fn(f),
         }
     }
     fn visit_var_dec_stmt(&mut self, var: &VarDecArgs) -> T;
@@ -48,4 +49,5 @@ pub trait StmtVisitor<T> {
     fn visit_if_stmt(&mut self, if_: &IfArgs) -> T;
     fn visit_block_stmt(&mut self, block: &BlockArgs) -> T;
     fn visit_while_stmt(&mut self, while_: &WhileArgs) -> T;
+    fn visit_fn(&mut self, f: &FnDef) -> T;
 }

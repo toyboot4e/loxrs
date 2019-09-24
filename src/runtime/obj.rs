@@ -1,7 +1,7 @@
 //! Object (value, variable or function) definitions
 
 use crate::ast::expr::*;
-use crate::ast::stmt::BlockArgs;
+use crate::ast::stmt::{FnDef};
 
 /// Anything at runtime
 ///
@@ -89,14 +89,8 @@ impl LoxObj {
 #[derive(Clone, Debug, PartialEq)]
 pub enum LoxFn {
     User(FnDef),
+    // TOOD: define it in globals
     /// A native function embedded in rulox
     Clock,
-}
-
-pub type Params = Vec<String>;
-#[derive(Clone, Debug, PartialEq)]
-pub struct FnDef {
-    pub name: String,
-    pub body: BlockArgs,
-    pub params: Params,
+    // Native(String, Option<Args>),
 }

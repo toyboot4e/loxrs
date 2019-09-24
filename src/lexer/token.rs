@@ -36,7 +36,7 @@ pub enum Token {
     Class,
     Else,
     False,
-    Fun,
+    Fn,
     For,
     If,
     Nil,

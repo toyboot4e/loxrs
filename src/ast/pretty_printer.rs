@@ -178,15 +178,19 @@ impl PrettyPrint for BlockArgs {
     }
 }
 
+fn vec_to_s(xs: &Vec<impl ::std::fmt::Debug>) -> String {
+    format!("{:?}", xs)
+}
+
 impl PrettyPrint for Stmt {
     fn pretty_print(&self) -> String {
         use Stmt::*;
         match *self {
             Expr(ref expr) => format!("(expr {})", expr.pretty_print()),
-            Print(ref print) => format!("(print {})", print.expr.pretty_print()),
+            Print(ref print) => format!("(print \"{}\")", print.expr.pretty_print()),
             Var(ref var) => format!("(var {} {})", var.name, var.init.pretty_print()),
             If(ref if_) => format!(
-                "(if ({}) {} {})",
+                "(if {} {} {})",
                 if_.condition.pretty_print(),
                 if_.if_true.pretty_print(),
                 match if_.if_false {
@@ -207,6 +211,15 @@ impl PrettyPrint for Stmt {
                 "(while {} {})",
                 while_.condition.pretty_print(),
                 while_.block.pretty_print(),
+            ),
+            Fn(ref f) => format!(
+                "(fn {} {} {}",
+                f.name,
+                f.params
+                    .as_ref()
+                    .map(|params| self::vec_to_s(params))
+                    .unwrap_or("()".into()),
+                f.body.pretty_print(),
             ),
         }
     }

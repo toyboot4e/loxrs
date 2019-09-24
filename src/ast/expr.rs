@@ -1,4 +1,3 @@
-use crate::lexer::parser::ParseError;
 use crate::lexer::token::Token;
 use std::convert::From;
 
@@ -52,14 +51,11 @@ impl Expr {
         Expr::Variable(name.to_string())
     }
 
-    pub fn assign(left: Expr, oper: AssignOper, right: Expr) -> Result<Expr, ParseError> {
-        match left {
-            Expr::Variable(ref name) => Ok(Expr::Assign(Box::new(AssignArgs {
-                name: name.to_string(),
-                expr: right,
-            }))),
-            _ => Err(ParseError::NotAssignable(left)),
-        }
+    pub fn assign(name: impl Into<String>, expr: Expr) -> Expr {
+        Expr::Assign(Box::new(AssignArgs {
+            name: name.into(),
+            expr: expr,
+        }))
     }
 
     pub fn call(callee: Expr, args: Option<Args>) -> Self {

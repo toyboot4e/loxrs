@@ -1,5 +1,6 @@
-use ::std::cell::RefCell;
-use ::std::rc::Rc;
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::time::SystemTime;
 
 use super::env::Env;
 use super::visitor::StmtVisitor;
@@ -12,36 +13,79 @@ use crate::runtime::{
 };
 
 pub struct Interpreter {
+    /// Points to the global `Env`
     globals: Rc<RefCell<Env>>,
+    /// Temporary `Env` for proessing
     env: Rc<RefCell<Env>>,
+    /// Enables `clock` native function
+    on_begin: SystemTime,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
-        let globals = Env::new();
+        let globals = Self::global_env();
+        let globals = Rc::new(RefCell::new(globals));
+        let env = Rc::new(RefCell::new(Env::from_parent(&globals)));
         Self {
-            globals: Rc::new(RefCell::new(globals)),
-            env: Rc::new(RefCell::new(Env::new())),
+            globals: globals,
+            env: env,
+            on_begin: SystemTime::now(),
         }
     }
 
-    /// Statement interruption with Visitor pattern
+    /// Make native functions dispatchable (via `env.get`)
+    fn global_env() -> Env {
+        let mut env = Env::new();
+        env.define("clock", LoxObj::Callable(LoxFn::Clock)).unwrap();
+        env
+    }
+
+    /// Statement interpretation with Visitor pattern
     pub fn interpret(&mut self, stmt: &Stmt) -> Result<()> {
         self.visit_stmt(stmt)
     }
 
     // TODO: returning variable (using return statement)
     /// Invokes a given function object
-    pub fn invoke(&mut self, fn_obj: &LoxFn, args: &Args) -> Result<Option<LoxObj>> {
+    pub fn invoke(&mut self, fn_obj: &LoxFn, args: &Option<Args>) -> Result<Option<LoxObj>> {
         let fn_def = match fn_obj {
             LoxFn::User(ref def) => def,
-            LoxFn::Clock => return Ok(None),
+            LoxFn::Clock => {
+                let s = self.native_clock(args)?;
+                return Ok(Some(LoxObj::Value(s)));
+            }
         };
-        if args.len() != fn_def.params.len() {
-            return Err(RuntimeError::WrongNumberOfArguments);
-        }
+
+        Self::validate_arities(
+            fn_def.params.as_ref().map(|xs| xs.len()),
+            args.as_ref().map(|xs| xs.len()),
+        )?;
+
         self.visit_block_stmt(&fn_def.body)?;
         Ok(None)
+    }
+
+    /// Compares two arities (may be None) and validate them
+    fn validate_arities(n1: Option<usize>, n2: Option<usize>) -> Result<()> {
+        match (n1, n2) {
+            (None, None) => Ok(()),
+            (Some(_), None) | (None, Some(_)) => Err(RuntimeError::WrongNumberOfArguments),
+            (Some(len_params), Some(len_args)) if len_params != len_args => {
+                Err(RuntimeError::WrongNumberOfArguments)
+            }
+            _ => Ok(()),
+        }
+    }
+
+    /// Milli seconds since the Lox program is started
+    pub fn native_clock(&self, args: &Option<Args>) -> Result<LoxValue> {
+        if !args.is_none() {
+            return Err(RuntimeError::WrongNumberOfArguments);
+        }
+        Ok(LoxValue::Number(
+            //self.on_begin.elapsed().unwrap().as_secs() as f64
+            self.on_begin.elapsed().unwrap().as_millis() as f64,
+        ))
     }
 }
 
@@ -60,6 +104,7 @@ fn stringify_obj(obj: &LoxObj) -> String {
     }
 }
 
+/// Statements returns nothing
 impl StmtVisitor<Result<()>> for Interpreter {
     fn visit_expr_stmt(&mut self, expr: &Expr) -> Result<()> {
         let v = self.eval_expr(expr)?;
@@ -112,6 +157,10 @@ impl StmtVisitor<Result<()>> for Interpreter {
             self.visit_block_stmt(&while_.block)?;
         }
         Ok(())
+    }
+
+    fn visit_fn(&mut self, f: &FnDef) -> Result<()> {
+        unimplemented!()
     }
 }
 
@@ -190,7 +239,7 @@ mod logic {
 }
 
 use crate::runtime::visitor::ExprVisitor;
-use ::std::cmp::Ordering;
+use std::cmp::Ordering;
 
 /// Visitors for implementing `eval_expr`
 impl ExprVisitor<Result<LoxObj>> for Interpreter {
@@ -276,10 +325,7 @@ impl ExprVisitor<Result<LoxObj>> for Interpreter {
 
     fn visit_var_expr(&mut self, name: &str) -> Result<LoxObj> {
         let env = self.env.borrow_mut();
-        match env.get(name) {
-            Ok(obj) => Ok(obj),
-            Err(_) => Err(RuntimeError::Undefined(name.to_string())),
-        }
+        env.get(name)
     }
 
     fn visit_assign_expr(&mut self, assign: &AssignArgs) -> Result<LoxObj> {
@@ -293,7 +339,10 @@ impl ExprVisitor<Result<LoxObj>> for Interpreter {
     fn visit_call_expr(&mut self, call: &CallArgs) -> Result<LoxObj> {
         if let LoxObj::Callable(ref f) = self.eval_expr(&call.callee)? {
             // call
-            unimplemented!()
+            match f {
+                LoxFn::User(ref def) => unimplemented!(),
+                LoxFn::Clock => self.native_clock(&call.args).map(|v| LoxObj::Value(v)),
+            }
         } else {
             Err(RuntimeError::MismatchedType)
         }
