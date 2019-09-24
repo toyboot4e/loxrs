@@ -13,7 +13,7 @@ fn main() {
             loxrs::run_file(&args[1]);
         }
         _ => {
-            eprintln!("Given more than one arguments");
+            eprintln!("Given more than one argument");
         }
     }
 }

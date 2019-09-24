@@ -1,11 +1,32 @@
 use crate::ast::expr::Expr;
 
+// TODO: use proper places for function definitions
+pub type Params = Vec<String>;
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct FnDef {
+    pub name: String,
+    pub body: BlockArgs, // Vec
+    pub params: Option<Params>, // Vec
+}
+
+impl FnDef {
+    pub fn new(name: String, body: BlockArgs, params: Option<Params>) -> Self {
+        Self {
+            name: name,
+            body: body,
+            params: params,
+        }
+    }
+}
+
 // FIXME: where to box
 /// Stmt → expr | if | print | block ;
 #[derive(Clone, Debug, PartialEq)]
 pub enum Stmt {
     /// exprStmt  → expression ";" ;
     Expr(Expr),
+    Fn(FnDef),
     /// printStmt → "print" expression ";" ;
     Print(PrintArgs),
     Var(VarDecArgs),
@@ -36,20 +57,14 @@ impl Stmt {
     }
 
     pub fn block(stmts: Vec<Stmt>) -> Self {
-        Stmt::Block(
-            BlockArgs {
-                stmts: stmts,
-            }
-        )
+        Stmt::Block(BlockArgs { stmts: stmts })
     }
 
     pub fn while_(condition: Expr, block: BlockArgs) -> Self {
-        Stmt::While(
-            WhileArgs {
-                condition: condition,
-                block: block
-            }
-        )
+        Stmt::While(WhileArgs {
+            condition: condition,
+            block: block,
+        })
     }
 }
 

@@ -1,5 +1,4 @@
-use crate::runtime::interpreter::RuntimeError;
-use crate::runtime::obj::LoxObj;
+use crate::runtime::{RuntimeError, obj::LoxObj};
 use ::std::cell::RefCell;
 use ::std::collections::HashMap;
 use ::std::rc::{Rc, Weak};
@@ -7,6 +6,7 @@ use ::std::rc::{Rc, Weak};
 type Result<T> = ::std::result::Result<T, RuntimeError>;
 
 pub struct Env {
+    /// Objects; variables or functions
     map: RefCell<HashMap<String, LoxObj>>,
     /// Enclosing environment (if any)
     parent: Weak<RefCell<Self>>,
@@ -52,7 +52,6 @@ impl Env {
     pub fn assign(&mut self, name: &str, obj: LoxObj) -> Result<()> {
         let mut map = self.map.borrow_mut();
         if map.contains_key(name) {
-            println!("assingn {:?}", &obj);
             map.insert(name.to_owned(), obj);
             Ok(())
         } else {

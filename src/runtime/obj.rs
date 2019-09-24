@@ -1,6 +1,9 @@
-use crate::ast::expr::*;
+//! Object (value, variable or function) definitions
 
-/// The primary object at runtime interpreting
+use crate::ast::expr::*;
+use crate::ast::stmt::{FnDef};
+
+/// Anything at runtime
 ///
 /// primary → "true" | "false" | "nil"
 ///         | NUMBER | STRING
@@ -8,54 +11,93 @@ use crate::ast::expr::*;
 ///         | IDENTIFIER ;
 #[derive(Clone, Debug, PartialEq)]
 pub enum LoxObj {
-    // TODO: make value type
-    Value(LiteralArgs),
-    // Variable(String),
+    Value(LoxValue),
+    Callable(LoxFn),
+    /// An identifier; passive reference to a variable. The instance is gotten from an `Env`.
+    Variable(String),
 }
 
-// pub enum ValueArgs {}
+impl LoxObj {
+    pub fn f(f: &FnDef) -> Self {
+        // TODO: not to clone when defining a function
+        LoxObj::Callable(LoxFn::User(f.clone()))
+    }
+}
 
-impl From<LiteralArgs> for LoxObj {
-    fn from(item: LiteralArgs) -> LoxObj {
-        LoxObj::Value(item)
+// TODO: use traits and share instances between `LoxObj` & `LiteralArgs`
+#[derive(Clone, Debug, PartialEq)]
+pub enum LoxValue {
+    Nil,
+    Bool(bool),
+    StringLit(String),
+    Number(f64),
+}
+
+impl LoxValue {
+    pub fn from_lit(lit: &LiteralArgs) -> Self {
+        match lit {
+            LiteralArgs::Nil => LoxValue::Nil,
+            LiteralArgs::Bool(b) => LoxValue::Bool(b.clone()),
+            LiteralArgs::StringLit(s) => LoxValue::StringLit(s.clone()),
+            LiteralArgs::Number(n) => LoxValue::Number(n.clone()),
+        }
+    }
+}
+
+impl From<LoxValue> for LoxObj {
+    fn from(value: LoxValue) -> Self {
+        LoxObj::Value(value)
     }
 }
 
 impl LoxObj {
     pub fn bool(b: bool) -> Self {
-        LoxObj::Value(LiteralArgs::Bool(b))
+        LoxObj::Value(LoxValue::Bool(b))
+    }
+
+    pub fn from_lit(lit: &LiteralArgs) -> Self {
+        LoxObj::Value(LoxValue::from_lit(lit))
     }
 
     pub fn is_truthy(&self) -> bool {
-        use LiteralArgs::*;
-        let lit = match self {
+        use LoxValue::*;
+        let value = match self {
             LoxObj::Value(lit) => lit,
             _ => return false,
         };
-        match lit {
+        match value {
             Nil | Bool(true) => true,
             _ => false,
         }
     }
 
-    pub fn as_lit(&self) -> Option<&LiteralArgs> {
+    pub fn as_value(&self) -> Option<&LoxValue> {
         match self {
-            LoxObj::Value(ref args) => Some(args),
+            LoxObj::Value(ref value) => Some(value),
             _ => None,
         }
     }
 
     pub fn as_num(&self) -> Option<f64> {
         match self {
-            LoxObj::Value(LiteralArgs::Number(n)) => Some(n.clone()),
+            LoxObj::Value(LoxValue::Number(n)) => Some(n.clone()),
             _ => None,
         }
     }
 
     pub fn is_nil(&self) -> bool {
         match self {
-            LoxObj::Value(LiteralArgs::Nil) => true,
+            LoxObj::Value(LoxValue::Nil) => true,
             _ => false,
         }
     }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum LoxFn {
+    User(FnDef),
+    // TOOD: define it in globals
+    /// A native function embedded in rulox
+    Clock,
+    // Native(String, Option<Args>),
 }

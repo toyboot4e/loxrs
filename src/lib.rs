@@ -5,13 +5,13 @@
 #![warn(rust_2018_idioms)]
 
 mod ast;
-mod runtime;
 mod lexer;
+mod runtime;
 
 use crate::ast::stmt::Stmt;
 use crate::ast::PrettyPrint;
-use crate::runtime::Interpreter;
 use crate::lexer::{parser::Parser, scanner::Scanner};
+use crate::runtime::Interpreter;
 
 use std::fs;
 use std::io::{self, BufRead, BufWriter, Write}; // flush()
@@ -37,8 +37,7 @@ pub fn run_file(path: &str) {
     self::interpret(&mut stmts);
 }
 
-fn print_all_debug(description: &str, items: impl IntoIterator<Item=impl ::std::fmt::Debug>)
-{
+fn print_all_debug(description: &str, items: impl IntoIterator<Item = impl ::std::fmt::Debug>) {
     let out = io::stdout();
     let mut out = BufWriter::new(out.lock());
     writeln!(out, "{}", description).unwrap();
@@ -48,8 +47,7 @@ fn print_all_debug(description: &str, items: impl IntoIterator<Item=impl ::std::
     writeln!(out).unwrap();
 }
 
-fn print_all_display(description: &str, items: impl IntoIterator<Item=impl ::std::fmt::Display>)
-{
+fn print_all_display(description: &str, items: impl IntoIterator<Item = impl ::std::fmt::Display>) {
     let out = io::stdout();
     let mut out = BufWriter::new(out.lock());
     writeln!(out, "{}", description).unwrap();
@@ -88,15 +86,19 @@ pub fn run_repl() {
 
 pub fn interpret(stmts: &mut [Stmt]) {
     let mut interpreter = Interpreter::new();
-    println!("====== interuption =====");
+    println!("====== interpretations =====");
     match stmts
         .iter()
-        .map(|x| interpreter.interpret(x))
-        .find(|x| x.is_err())
+        // .map(|x| interpreter.interpret(x))
+        // .find(|x| x.is_err())
+        .enumerate()
+        .map(|(i, stmt)| (i, interpreter.interpret(stmt)))
+        .find(|(i, result)| result.is_err())
     {
-        Some(err) => {
+        // Some(err) => {
+        Some((i, err)) => {
             println!("\n====== runtime errors =====");
-            println!("{:?}", err);
+            println!("at {}, {:?}", i, err);
         }
         None => {}
     }

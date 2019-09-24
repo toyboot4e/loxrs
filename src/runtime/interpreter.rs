@@ -1,49 +1,109 @@
-use ::std::cell::RefCell;
-use ::std::rc::Rc;
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::time::SystemTime;
 
 use super::env::Env;
 use super::visitor::StmtVisitor;
 
+use crate::ast::PrettyPrint;
 use crate::ast::{expr::*, stmt::*};
-use crate::runtime::obj::LoxObj;
-
-/// Runtime error when evaluating expressions.
-#[derive(Debug)]
-pub enum RuntimeError {
-    MismatchedType,
-    /// Tried to lookup undefined variable
-    Undefined(String),
-    // TODO: enable overwriting
-    DuplicateDeclaration(String),
-}
-
-type Result<T> = ::std::result::Result<T, RuntimeError>;
+use crate::runtime::{
+    obj::{LoxFn, LoxObj, LoxValue},
+    Result, RuntimeError,
+};
 
 pub struct Interpreter {
+    /// Points to the global `Env`
+    globals: Rc<RefCell<Env>>,
+    /// Temporary `Env` for proessing
     env: Rc<RefCell<Env>>,
+    /// Enables `clock` native function
+    on_begin: SystemTime,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
+        let globals = Self::global_env();
+        let globals = Rc::new(RefCell::new(globals));
+        let env = Rc::new(RefCell::new(Env::from_parent(&globals)));
         Self {
-            env: Rc::new(RefCell::new(Env::new())),
+            globals: globals,
+            env: env,
+            on_begin: SystemTime::now(),
         }
     }
 
-    /// Implemented with Visitor pattern
+    /// Make native functions dispatchable (via `env.get`)
+    fn global_env() -> Env {
+        let mut env = Env::new();
+        env.define("clock", LoxObj::Callable(LoxFn::Clock)).unwrap();
+        env
+    }
+
+    /// Statement interpretation with Visitor pattern
     pub fn interpret(&mut self, stmt: &Stmt) -> Result<()> {
         self.visit_stmt(stmt)
+    }
+
+    /// Invokes a given function object
+    pub fn invoke(&mut self, fn_obj: &LoxFn, args: &Option<Args>) -> Result<Option<LoxObj>> {
+        let def = match fn_obj {
+            LoxFn::User(ref def) => def,
+            LoxFn::Clock => {
+                let s = self.native_clock(args)?;
+                return Ok(Some(LoxObj::Value(s)));
+            }
+        };
+
+        Self::validate_arities(
+            def.params.as_ref().map(|xs| xs.len()),
+            args.as_ref().map(|xs| xs.len()),
+        )?;
+
+        // FIXME: nesting environments
+        let mut env = Env::from_parent(&self.env);
+        if let (Some(params), Some(args)) = (&def.params, args) {
+            for i in 0..params.len() {
+                env.define(params[i].as_str(), self.eval_expr(&args[i])?)?;
+            }
+        }
+
+        self.visit_block_stmt(&def.body, Some(env))?;
+        Ok(None)
+    }
+
+    /// Compares two arities (may be None) and validate them
+    fn validate_arities(n1: Option<usize>, n2: Option<usize>) -> Result<()> {
+        match (n1, n2) {
+            (None, None) => Ok(()),
+            (Some(_), None) | (None, Some(_)) => Err(RuntimeError::WrongNumberOfArguments),
+            (Some(len_params), Some(len_args)) if len_params != len_args => {
+                Err(RuntimeError::WrongNumberOfArguments)
+            }
+            _ => Ok(()),
+        }
+    }
+
+    /// Milli seconds since the Lox program is started
+    pub fn native_clock(&self, args: &Option<Args>) -> Result<LoxValue> {
+        if !args.is_none() {
+            return Err(RuntimeError::WrongNumberOfArguments);
+        }
+        Ok(LoxValue::Number(
+            //self.on_begin.elapsed().unwrap().as_secs() as f64
+            self.on_begin.elapsed().unwrap().as_millis() as f64,
+        ))
     }
 }
 
 fn stringify_obj(obj: &LoxObj) -> String {
     if let LoxObj::Value(lit) = obj {
-        use LiteralArgs::*;
+        use LoxValue::*;
         match lit {
             Nil => "<nil>".to_string(),
             Bool(b) => b.to_string(),
             // TODO: avoid cloning?
-            StringL(s) => s.clone(),
+            StringLit(s) => s.clone(),
             Number(n) => n.to_string(),
         }
     } else {
@@ -51,23 +111,25 @@ fn stringify_obj(obj: &LoxObj) -> String {
     }
 }
 
+/// Executes AST
+///
+/// Statements returns nothing
 impl StmtVisitor<Result<()>> for Interpreter {
     fn visit_expr_stmt(&mut self, expr: &Expr) -> Result<()> {
         let v = self.eval_expr(expr)?;
-        println!("expr: {:?}", v);
         Ok(())
     }
 
     fn visit_print_stmt(&mut self, print: &PrintArgs) -> Result<()> {
-        let v = self.eval_expr(&print.expr)?;
-        println!("print: {:?}", stringify_obj(&v));
+        let obj = self.eval_expr(&print.expr)?;
+        // println!("{}", expr.pretty_print());
+        println!("{}", obj.pretty_print());
         Ok(())
     }
 
-    fn visit_var_dec_stmt(&mut self, var: &VarDecArgs) -> Result<()> {
+    fn visit_var_decl(&mut self, var: &VarDecArgs) -> Result<()> {
         let name = &var.name;
         let obj = self.eval_expr(&var.init)?;
-        println!("var_dec: {:?} = {:?}", name, &obj);
         self.env.borrow_mut().define(name, obj)?;
         Ok(())
     }
@@ -82,10 +144,19 @@ impl StmtVisitor<Result<()>> for Interpreter {
         }
     }
 
-    fn visit_block_stmt(&mut self, block: &BlockArgs) -> Result<()> {
+    fn visit_block_stmt(&mut self, block: &BlockArgs, env: Option<Env>) -> Result<()> {
+        let env = env.unwrap_or_else(|| {
+            Env::from_parent(&self.env)
+        });
+
         let prev = Rc::clone(&self.env);
-        self.env = Rc::new(RefCell::new(Env::from_parent(&prev)));
-        if let Some(err_result) = block.stmts.iter().map(|x| self.interpret(x)).find(|x| x.is_err()) {
+        self.env = Rc::new(RefCell::new(env));
+        if let Some(err_result) = block
+            .stmts
+            .iter()
+            .map(|x| self.interpret(x))
+            .find(|x| x.is_err())
+        {
             self.env = prev;
             err_result
         } else {
@@ -96,8 +167,15 @@ impl StmtVisitor<Result<()>> for Interpreter {
 
     fn visit_while_stmt(&mut self, while_: &WhileArgs) -> Result<()> {
         while self.eval_expr(&while_.condition)?.is_truthy() {
-            self.visit_block_stmt(&while_.block)?;
+            self.visit_block_stmt(&while_.block, None)?;
         }
+        Ok(())
+    }
+
+    fn visit_fn_decl(&mut self, f: &FnDef) -> Result<()> {
+        self.env
+            .borrow_mut()
+            .define(f.name.as_str(), LoxObj::f(f))?;
         Ok(())
     }
 }
@@ -118,60 +196,57 @@ impl EvalExpr for Interpreter {
 }
 
 // TODO: using Value struct
-use LiteralArgs as Lit;
 use LoxObj::Value as ValObj;
 
 mod logic {
     //! Operator overloading for specific LoxObj_s.
 
-    use crate::ast::expr::*;
-    use crate::runtime::obj::LoxObj;
+    use crate::runtime::obj::{LoxObj, LoxValue};
     use std::cmp::Ordering;
-    use LiteralArgs as Lit;
 
-    pub fn obj_eq(left: &LiteralArgs, right: &LiteralArgs) -> Option<bool> {
+    pub fn obj_eq(left: &LoxValue, right: &LoxValue) -> Option<bool> {
         Some(match (left, right) {
-            (Lit::Number(n1), Lit::Number(n2)) => n1 == n2,
-            (Lit::Bool(b1), Lit::Bool(b2)) => b1 == b2,
-            (Lit::StringL(s1), Lit::StringL(s2)) => s1 == s2,
+            (LoxValue::Number(n1), LoxValue::Number(n2)) => n1 == n2,
+            (LoxValue::Bool(b1), LoxValue::Bool(b2)) => b1 == b2,
+            (LoxValue::StringLit(s1), LoxValue::StringLit(s2)) => s1 == s2,
             _ => return None,
         })
     }
 
-    pub fn obj_cmp(left: &LiteralArgs, right: &LiteralArgs) -> Option<Ordering> {
+    pub fn obj_cmp(left: &LoxValue, right: &LoxValue) -> Option<Ordering> {
         match (left, right) {
-            (Lit::Number(n1), Lit::Number(n2)) => n1.partial_cmp(n2),
+            (LoxValue::Number(n1), LoxValue::Number(n2)) => n1.partial_cmp(n2),
             _ => None,
         }
     }
 
-    pub fn obj_plus(left: &LiteralArgs, right: &LiteralArgs) -> Option<LoxObj> {
-        use LiteralArgs::*;
+    pub fn obj_plus(left: &LoxValue, right: &LoxValue) -> Option<LoxObj> {
+        use LoxValue::*;
         Some(LoxObj::Value(match (left, right) {
             (Number(n1), Number(n2)) => Number(n1 + n2),
-            (StringL(s1), StringL(s2)) => StringL(format!("{}{}", s1, s2)),
+            (StringLit(s1), StringLit(s2)) => StringLit(format!("{}{}", s1, s2)),
             _ => return None,
         }))
     }
 
-    pub fn obj_minus(left: &LiteralArgs, right: &LiteralArgs) -> Option<LoxObj> {
-        use LiteralArgs::*;
+    pub fn obj_minus(left: &LoxValue, right: &LoxValue) -> Option<LoxObj> {
+        use LoxValue::*;
         Some(LoxObj::Value(match (left, right) {
             (Number(n1), Number(n2)) => Number(n1 - n2),
             _ => return None,
         }))
     }
 
-    pub fn obj_div(left: &LiteralArgs, right: &LiteralArgs) -> Option<LoxObj> {
-        use LiteralArgs::*;
+    pub fn obj_div(left: &LoxValue, right: &LoxValue) -> Option<LoxObj> {
+        use LoxValue::*;
         Some(LoxObj::Value(match (left, right) {
             (Number(n1), Number(n2)) => Number(n1 / n2),
             _ => return None,
         }))
     }
 
-    pub fn obj_mul(left: &LiteralArgs, right: &LiteralArgs) -> Option<LoxObj> {
-        use LiteralArgs::*;
+    pub fn obj_mul(left: &LoxValue, right: &LoxValue) -> Option<LoxObj> {
+        use LoxValue::*;
         Some(LoxObj::Value(match (left, right) {
             (Number(n1), Number(n2)) => Number(n1 * n2),
             _ => return None,
@@ -180,12 +255,12 @@ mod logic {
 }
 
 use crate::runtime::visitor::ExprVisitor;
-use ::std::cmp::Ordering;
+use std::cmp::Ordering;
 
 /// Visitors for implementing `eval_expr`
 impl ExprVisitor<Result<LoxObj>> for Interpreter {
-    fn visit_literal_expr(&mut self, literal: &LiteralArgs) -> Result<LoxObj> {
-        Ok(ValObj(literal.clone()))
+    fn visit_literal_expr(&mut self, lit: &LiteralArgs) -> Result<LoxObj> {
+        Ok(ValObj(LoxValue::from_lit(lit)))
     }
 
     fn visit_unary_expr(&mut self, unary: &UnaryArgs) -> Result<LoxObj> {
@@ -194,12 +269,13 @@ impl ExprVisitor<Result<LoxObj>> for Interpreter {
         match &unary.oper {
             Minus => {
                 let n = obj.as_num().ok_or_else(|| RuntimeError::MismatchedType)?;
-                Ok(LoxObj::Value(Lit::Number(-n)))
+                Ok(LoxObj::Value(LoxValue::Number(-n)))
             }
             Not => Ok(LoxObj::bool(!obj.is_truthy())),
         }
     }
 
+    /// `==`, `!=`, `<`, `<=`, `>`, `>=`, `+`, `-`, `*`, `/`
     fn visit_binary_expr(&mut self, binary: &BinaryArgs) -> Result<LoxObj> {
         use BinaryOper::*;
         let oper = binary.oper.clone();
@@ -207,8 +283,12 @@ impl ExprVisitor<Result<LoxObj>> for Interpreter {
         let left = self.visit_expr(&binary.left)?;
         let right = self.visit_expr(&binary.right)?;
 
-        let left = left.as_lit().ok_or_else(|| RuntimeError::MismatchedType)?;
-        let right = right.as_lit().ok_or_else(|| RuntimeError::MismatchedType)?;
+        let left = left
+            .as_value()
+            .ok_or_else(|| RuntimeError::MismatchedType)?;
+        let right = right
+            .as_value()
+            .ok_or_else(|| RuntimeError::MismatchedType)?;
 
         // TODO: error if failed to cast
         Ok(match oper {
@@ -241,6 +321,7 @@ impl ExprVisitor<Result<LoxObj>> for Interpreter {
         })
     }
 
+    /// `&&`, `||`
     fn visit_logic_expr(&mut self, logic: &LogicArgs) -> Result<LoxObj> {
         let oper = logic.oper.clone();
         let left_truthy = self.visit_expr(&logic.left)?.is_truthy();
@@ -252,16 +333,15 @@ impl ExprVisitor<Result<LoxObj>> for Interpreter {
                     LoxObj::bool(self.visit_expr(&logic.right)?.is_truthy())
                 }
             }
-            LogicOper::And => LoxObj::bool(left_truthy && self.visit_expr(&logic.right)?.is_truthy())
+            LogicOper::And => {
+                LoxObj::bool(left_truthy && self.visit_expr(&logic.right)?.is_truthy())
+            }
         })
     }
 
     fn visit_var_expr(&mut self, name: &str) -> Result<LoxObj> {
         let env = self.env.borrow_mut();
-        match env.get(name) {
-            Ok(obj) => Ok(obj.clone()), // FIXME
-            Err(_) => Err(RuntimeError::Undefined(name.to_string())),
-        }
+        env.get(name)
     }
 
     fn visit_assign_expr(&mut self, assign: &AssignArgs) -> Result<LoxObj> {
@@ -270,5 +350,14 @@ impl ExprVisitor<Result<LoxObj>> for Interpreter {
             .borrow_mut()
             .assign(assign.name.as_str(), obj.clone())?;
         Ok(obj)
+    }
+
+    fn visit_call_expr(&mut self, call: &CallArgs) -> Result<LoxObj> {
+        if let LoxObj::Callable(ref fn_obj) = self.eval_expr(&call.callee)? {
+            self.invoke(fn_obj, &call.args)?;
+            Ok(LoxObj::Value(LoxValue::Nil))
+        } else {
+            Err(RuntimeError::MismatchedType)
+        }
     }
 }
