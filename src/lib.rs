@@ -86,7 +86,7 @@ pub fn run_repl() {
 
 pub fn interpret(stmts: &mut [Stmt]) {
     let mut interpreter = Interpreter::new();
-    println!("====== interruptions =====");
+    println!("====== interpretations =====");
     match stmts
         .iter()
         // .map(|x| interpreter.interpret(x))
