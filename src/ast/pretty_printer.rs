@@ -213,7 +213,7 @@ impl PrettyPrint for Stmt {
                 while_.block.pretty_print(),
             ),
             Fn(ref f) => format!(
-                "(fn {} {} {}",
+                "(defn {} {} {}",
                 f.name,
                 f.params
                     .as_ref()
