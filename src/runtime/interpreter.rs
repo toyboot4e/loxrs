@@ -62,7 +62,7 @@ impl Interpreter {
             args.as_ref().map(|xs| xs.len()),
         )?;
 
-        // FIXME: nesting environments
+        // FIXME: enable nesting environments (scope: implemented in Ch. 11)
         let mut env = Env::from_parent(&self.env);
         if let (Some(params), Some(args)) = (&def.params, args) {
             for i in 0..params.len() {

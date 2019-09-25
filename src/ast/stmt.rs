@@ -6,7 +6,7 @@ pub type Params = Vec<String>;
 #[derive(Clone, Debug, PartialEq)]
 pub struct FnDef {
     pub name: String,
-    pub body: BlockArgs, // Vec
+    pub body: BlockArgs,        // Vec
     pub params: Option<Params>, // Vec
 }
 
@@ -20,7 +20,6 @@ impl FnDef {
     }
 }
 
-// FIXME: where to box
 /// Stmt → expr | if | print | block ;
 #[derive(Clone, Debug, PartialEq)]
 pub enum Stmt {
