@@ -207,6 +207,7 @@ impl PrettyPrint for Stmt {
                     .collect::<Vec<String>>()
                     .join("\n  ")
             ),
+            Return(ref ret) => format!( "(return {})", ret.expr.pretty_print()),
             While(ref while_) => format!(
                 "(while {} {})",
                 while_.condition.pretty_print(),

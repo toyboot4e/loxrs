@@ -165,6 +165,11 @@ impl StmtVisitor<Result<()>> for Interpreter {
         }
     }
 
+    fn visit_return_stmt(&mut self, ret: &Return) -> Result<()> {
+        let expr = self.eval_expr(&ret.expr)?;
+        Ok(())
+    }
+
     fn visit_while_stmt(&mut self, while_: &WhileArgs) -> Result<()> {
         while self.eval_expr(&while_.condition)?.is_truthy() {
             self.visit_block_stmt(&while_.block, None)?;

@@ -159,7 +159,7 @@ pub enum ScanError {
 }
 
 pub struct Scanner<'a> {
-    state: hidden::ScanState<Chars<'a>>,
+    state: self::hidden::ScanState<Chars<'a>>,
 }
 
 /// Scanner implementation
@@ -167,7 +167,7 @@ impl<'a> Scanner<'a> {
     // TODO: make Scanner not to be owned
     pub fn new(src: &'a str) -> Self {
         Self {
-            state: hidden::ScanState::new(src),
+            state: self::hidden::ScanState::new(src),
         }
     }
 
