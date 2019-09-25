@@ -1,0 +1,19 @@
+var x = 10;
+
+print "this test must not be caugh by a trap!";
+
+fn test_return(x) {
+    print x;
+    if (true) {
+        return "returned";
+    } else {
+        print "trap A";
+    }
+    print "trap B";
+}
+
+print test_return(20);
+
+// TODO: enable escapes in quotes
+// print "..got proper return value `"returned"`?";
+
