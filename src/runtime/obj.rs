@@ -1,9 +1,9 @@
 //! Object (value, variable or function) definitions
 
 use crate::ast::expr::*;
-use crate::ast::stmt::{FnDef};
+use crate::ast::stmt::FnDef;
 
-/// Anything at runtime
+/// Anything evaluated (from AST) at runtime
 ///
 /// primary → "true" | "false" | "nil"
 ///         | NUMBER | STRING
@@ -13,8 +13,6 @@ use crate::ast::stmt::{FnDef};
 pub enum LoxObj {
     Value(LoxValue),
     Callable(LoxFn),
-    /// An identifier; passive reference to a variable. The instance is gotten from an `Env`.
-    Variable(String),
 }
 
 impl LoxObj {

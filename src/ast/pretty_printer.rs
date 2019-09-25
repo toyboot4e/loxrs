@@ -207,7 +207,7 @@ impl PrettyPrint for Stmt {
                     .collect::<Vec<String>>()
                     .join("\n  ")
             ),
-            Return(ref ret) => format!( "(return {})", ret.expr.pretty_print()),
+            Return(ref ret) => format!("(return {})", ret.expr.pretty_print()),
             While(ref while_) => format!(
                 "(while {} {})",
                 while_.condition.pretty_print(),
@@ -248,7 +248,6 @@ impl PrettyPrint for LoxObj {
         match self {
             LoxObj::Value(value) => value.pretty_print(),
             LoxObj::Callable(call) => call.pretty_print(),
-            LoxObj::Variable(var) => format!("(var {})", var),
         }
     }
 }
