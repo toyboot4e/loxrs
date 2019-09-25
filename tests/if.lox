@@ -1,0 +1,27 @@
+var x = true;
+var y = false;
+
+!x;
+!!!!x;
+
+// normal
+if x {
+    print "x is true!";
+} else {
+    print "x is false!";
+}
+
+// conditinal expression
+if !x || true {
+    print "this `if` is always true";
+}
+
+// else if
+if !x {
+    print "x is false!";
+} else if y {
+    print "both x and y is true!";
+} else {
+    print "x is true, y is false";
+}
+

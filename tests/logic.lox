@@ -1,0 +1,4 @@
+var x = false || true;
+print x;
+x = false && true;
+print x;

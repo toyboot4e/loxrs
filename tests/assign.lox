@@ -1,0 +1,17 @@
+// new
+var x = 10;
+print x;
+
+// re-assign
+x = 20;
+print x;
+
+// recursive
+var y = 12;
+var z = 14;
+x = y = z = 50;
+
+print x;
+print y;
+print z;
+
