@@ -95,6 +95,7 @@ impl LoxObj {
 pub enum LoxFn {
     User(FnDef),
     // TOOD: define it in globals
+    // TOOD: print as a native function
     /// A native function embedded in rulox
     Clock,
     // Native(String, Option<Args>),

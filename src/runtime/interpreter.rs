@@ -1,3 +1,5 @@
+// TODO: consider early return from a file (by implicitely wrapping AST with block)
+
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::SystemTime;
@@ -111,7 +113,7 @@ fn stringify_obj(obj: &LoxObj) -> String {
     }
 }
 
-/// Implements statement interpretation
+/// Implements statement interpretation via Visitor pattern
 ///
 /// If something is returned, it's by `return` so we finish interpreting
 impl StmtVisitor<Result<Option<LoxObj>>> for Interpreter {
@@ -140,29 +142,26 @@ impl StmtVisitor<Result<Option<LoxObj>>> for Interpreter {
         } else if let Some(if_false) = if_.if_false.as_ref() {
             self.interpret(if_false)
         } else {
-        Ok(None)
+            Ok(None)
         }
     }
 
     fn visit_block_stmt(&mut self, block: &BlockArgs, env: Option<Env>) -> Result<Option<LoxObj>> {
-        let env = env.unwrap_or_else(|| {
-            Env::from_parent(&self.env)
-        });
+        let env = env.unwrap_or_else(|| Env::from_parent(&self.env));
 
         let prev = Rc::clone(&self.env);
         self.env = Rc::new(RefCell::new(env));
-        if let Some(err_result) = block
-            .stmts
-            .iter()
-            .map(|x| self.interpret(x))
-            .find(|x| x.is_err())
-        {
-            self.env = prev;
-            err_result
-        } else {
-            self.env = prev;
-        Ok(None)
+
+        for stmt in block.stmts.iter() {
+            // early return for `return` statement
+            match self.interpret(stmt)? {
+                Some(obj) => {
+                    return Ok(Some(obj));
+                }
+                None => {}
+            }
         }
+        Ok(None)
     }
 
     fn visit_return_stmt(&mut self, ret: &Return) -> Result<Option<LoxObj>> {
