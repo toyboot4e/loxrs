@@ -16,8 +16,21 @@ use crate::runtime::Interpreter;
 use std::fs;
 use std::io::{self, BufRead, BufWriter, Write}; // flush()
 
-// TODO: returning error
 pub fn run_file(path: &str) {
+    let source = match fs::read_to_string(path) {
+        Err(why) => {
+            println!("{} (given path: `{}`)", why, path);
+            ::std::process::exit(1);
+        }
+        Ok(s) => s,
+    };
+    let (tokens, scan_errors) = Scanner::new(&source).scan();
+    let (mut stmts, parse_errors) = Parser::new(&tokens).parse();
+    self::interpret(&mut stmts);
+}
+
+/// Runs a file with debug output (including lexer output)
+pub fn run_file_debug(path: &str) {
     let source = match fs::read_to_string(path) {
         Err(why) => {
             println!("{}", why);
@@ -89,13 +102,10 @@ pub fn interpret(stmts: &mut [Stmt]) {
     println!("====== interpretations =====");
     match stmts
         .iter()
-        // .map(|x| interpreter.interpret(x))
-        // .find(|x| x.is_err())
         .enumerate()
         .map(|(i, stmt)| (i, interpreter.interpret(stmt)))
         .find(|(i, result)| result.is_err())
     {
-        // Some(err) => {
         Some((i, err)) => {
             println!("\n====== runtime errors =====");
             println!("at {}, {:?}", i, err);

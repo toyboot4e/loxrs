@@ -6,7 +6,7 @@ pub type Params = Vec<String>;
 #[derive(Clone, Debug, PartialEq)]
 pub struct FnDef {
     pub name: String,
-    pub body: BlockArgs, // Vec
+    pub body: BlockArgs,        // Vec
     pub params: Option<Params>, // Vec
 }
 
@@ -20,7 +20,6 @@ impl FnDef {
     }
 }
 
-// FIXME: where to box
 /// Stmt → expr | if | print | block ;
 #[derive(Clone, Debug, PartialEq)]
 pub enum Stmt {
@@ -31,6 +30,7 @@ pub enum Stmt {
     Print(PrintArgs),
     Var(VarDecArgs),
     If(Box<IfArgs>),
+    Return(Return),
     While(WhileArgs),
     Block(BlockArgs),
 }
@@ -58,6 +58,10 @@ impl Stmt {
 
     pub fn block(stmts: Vec<Stmt>) -> Self {
         Stmt::Block(BlockArgs { stmts: stmts })
+    }
+
+    pub fn return_(expr: Expr) -> Self {
+        Stmt::Return(Return { expr: expr })
     }
 
     pub fn while_(condition: Expr, block: BlockArgs) -> Self {
@@ -120,6 +124,11 @@ impl BlockArgs {
     pub fn into_stmt(self) -> Stmt {
         Stmt::Block(self)
     }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Return {
+    pub expr: Expr,
 }
 
 #[derive(Clone, Debug, PartialEq)]

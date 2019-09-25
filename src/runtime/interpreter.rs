@@ -1,3 +1,5 @@
+// TODO: consider early return from a file (by implicitely wrapping AST with block)
+
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::SystemTime;
@@ -41,7 +43,7 @@ impl Interpreter {
     }
 
     /// Statement interpretation with Visitor pattern
-    pub fn interpret(&mut self, stmt: &Stmt) -> Result<()> {
+    pub fn interpret(&mut self, stmt: &Stmt) -> Result<Option<LoxObj>> {
         self.visit_stmt(stmt)
     }
 
@@ -60,7 +62,7 @@ impl Interpreter {
             args.as_ref().map(|xs| xs.len()),
         )?;
 
-        // FIXME: nesting environments
+        // FIXME: enable nesting environments (scope: implemented in Ch. 11)
         let mut env = Env::from_parent(&self.env);
         if let (Some(params), Some(args)) = (&def.params, args) {
             for i in 0..params.len() {
@@ -73,14 +75,14 @@ impl Interpreter {
     }
 
     /// Compares two arities (may be None) and validate them
-    fn validate_arities(n1: Option<usize>, n2: Option<usize>) -> Result<()> {
+    fn validate_arities(n1: Option<usize>, n2: Option<usize>) -> Result<Option<LoxObj>> {
         match (n1, n2) {
-            (None, None) => Ok(()),
+            (None, None) => Ok(None),
             (Some(_), None) | (None, Some(_)) => Err(RuntimeError::WrongNumberOfArguments),
             (Some(len_params), Some(len_args)) if len_params != len_args => {
                 Err(RuntimeError::WrongNumberOfArguments)
             }
-            _ => Ok(()),
+            _ => Ok(None),
         }
     }
 
@@ -111,72 +113,74 @@ fn stringify_obj(obj: &LoxObj) -> String {
     }
 }
 
-/// Executes AST
+/// Implements statement interpretation via Visitor pattern
 ///
-/// Statements returns nothing
-impl StmtVisitor<Result<()>> for Interpreter {
-    fn visit_expr_stmt(&mut self, expr: &Expr) -> Result<()> {
+/// If something is returned, it's by `return` so we finish interpreting
+impl StmtVisitor<Result<Option<LoxObj>>> for Interpreter {
+    fn visit_expr_stmt(&mut self, expr: &Expr) -> Result<Option<LoxObj>> {
         let v = self.eval_expr(expr)?;
-        Ok(())
+        Ok(None)
     }
 
-    fn visit_print_stmt(&mut self, print: &PrintArgs) -> Result<()> {
+    fn visit_print_stmt(&mut self, print: &PrintArgs) -> Result<Option<LoxObj>> {
         let obj = self.eval_expr(&print.expr)?;
         // println!("{}", expr.pretty_print());
         println!("{}", obj.pretty_print());
-        Ok(())
+        Ok(None)
     }
 
-    fn visit_var_decl(&mut self, var: &VarDecArgs) -> Result<()> {
+    fn visit_var_decl(&mut self, var: &VarDecArgs) -> Result<Option<LoxObj>> {
         let name = &var.name;
         let obj = self.eval_expr(&var.init)?;
         self.env.borrow_mut().define(name, obj)?;
-        Ok(())
+        Ok(None)
     }
 
-    fn visit_if_stmt(&mut self, if_: &IfArgs) -> Result<()> {
+    fn visit_if_stmt(&mut self, if_: &IfArgs) -> Result<Option<LoxObj>> {
         if self.eval_expr(&if_.condition)?.is_truthy() {
             self.interpret(&if_.if_true)
         } else if let Some(if_false) = if_.if_false.as_ref() {
             self.interpret(if_false)
         } else {
-            Ok(())
+            Ok(None)
         }
     }
 
-    fn visit_block_stmt(&mut self, block: &BlockArgs, env: Option<Env>) -> Result<()> {
-        let env = env.unwrap_or_else(|| {
-            Env::from_parent(&self.env)
-        });
+    fn visit_block_stmt(&mut self, block: &BlockArgs, env: Option<Env>) -> Result<Option<LoxObj>> {
+        let env = env.unwrap_or_else(|| Env::from_parent(&self.env));
 
         let prev = Rc::clone(&self.env);
         self.env = Rc::new(RefCell::new(env));
-        if let Some(err_result) = block
-            .stmts
-            .iter()
-            .map(|x| self.interpret(x))
-            .find(|x| x.is_err())
-        {
-            self.env = prev;
-            err_result
-        } else {
-            self.env = prev;
-            Ok(())
+
+        for stmt in block.stmts.iter() {
+            // early return for `return` statement
+            match self.interpret(stmt)? {
+                Some(obj) => {
+                    return Ok(Some(obj));
+                }
+                None => {}
+            }
         }
+        Ok(None)
     }
 
-    fn visit_while_stmt(&mut self, while_: &WhileArgs) -> Result<()> {
+    fn visit_return_stmt(&mut self, ret: &Return) -> Result<Option<LoxObj>> {
+        let obj = self.eval_expr(&ret.expr)?;
+        Ok(Some(obj))
+    }
+
+    fn visit_while_stmt(&mut self, while_: &WhileArgs) -> Result<Option<LoxObj>> {
         while self.eval_expr(&while_.condition)?.is_truthy() {
             self.visit_block_stmt(&while_.block, None)?;
         }
-        Ok(())
+        Ok(None)
     }
 
-    fn visit_fn_decl(&mut self, f: &FnDef) -> Result<()> {
+    fn visit_fn_decl(&mut self, f: &FnDef) -> Result<Option<LoxObj>> {
         self.env
             .borrow_mut()
             .define(f.name.as_str(), LoxObj::f(f))?;
-        Ok(())
+        Ok(None)
     }
 }
 

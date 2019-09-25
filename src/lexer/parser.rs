@@ -295,7 +295,7 @@ where
         Ok(Stmt::var_dec(name, init))
     }
 
-    /// stmt → exprStmt | printStmt | whileStmt | block ;
+    /// stmt → exprStmt | printStmt | returnStmt whileStmt | block ;
     ///
     /// The root of predictive statement parsing. Sub rules are named as `stmt_xxx`.
     /// Note that sub rules don't consume unexpected tokens.
@@ -314,12 +314,26 @@ where
                 self.next();
                 self.stmt_if()
             }
+            Return => {
+                self.next();
+                self.stmt_return()
+            }
             While => {
                 self.next();
                 self.stmt_while()
             }
             _ => self.stmt_expr(),
         }
+    }
+
+    /// printStmt → "print" expression ";" ;
+    ///
+    /// To be called after consuming `print` (predictive parsing).
+    fn stmt_print(&mut self) -> Result<Stmt> {
+        let expr = self.expr()?;
+        self.try_consume(&Token::Semicolon)?;
+        // TODO: adding Expr -> String functions for printing
+        Ok(Stmt::print(expr))
     }
 
     /// block → "{" declaration* "}" ;
@@ -342,24 +356,6 @@ where
             };
         }
         Ok(BlockArgs { stmts: stmts })
-    }
-
-    /// while → "while" expr block
-    pub fn stmt_while(&mut self) -> Result<Stmt> {
-        let condition = self.expr()?;
-        self.try_consume(&Token::LeftBrace)?;
-        let block = self.stmt_block()?;
-        Ok(Stmt::while_(condition, block))
-    }
-
-    /// printStmt → "print" expression ";" ;
-    ///
-    /// To be called after consuming `print` (predictive parsing).
-    fn stmt_print(&mut self) -> Result<Stmt> {
-        let expr = self.expr()?;
-        self.try_consume(&Token::Semicolon)?;
-        // TODO: adding Expr -> String functions for printing
-        Ok(Stmt::print(expr))
     }
 
     /// if → "if" expr block elseRecursive
@@ -396,6 +392,21 @@ where
                 &[Token::If, Token::LeftBrace],
             )),
         }
+    }
+
+    /// stmtReturn → "return" expression? ";" ;
+    pub fn stmt_return(&mut self) -> Result<Stmt> {
+        let expr = self.expr()?;
+        self.try_consume(&Token::Semicolon)?;
+        Ok(Stmt::return_(expr))
+    }
+
+    /// while → "while" expr block
+    pub fn stmt_while(&mut self) -> Result<Stmt> {
+        let condition = self.expr()?;
+        self.try_consume(&Token::LeftBrace)?;
+        let block = self.stmt_block()?;
+        Ok(Stmt::while_(condition, block))
     }
 
     /// Expression statement or (recursive) assignment

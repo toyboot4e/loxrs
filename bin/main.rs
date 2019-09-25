@@ -10,7 +10,8 @@ fn main() {
             loxrs::run_repl();
         }
         n if n >= 2 => {
-            loxrs::run_file(&args[1]);
+            // loxrs::run_file(&args[1]);
+            loxrs::run_file_debug(&args[1]);
         }
         _ => {
             eprintln!("Given more than one argument");
