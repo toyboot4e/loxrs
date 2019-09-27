@@ -9,8 +9,9 @@ Now doing: Ch.10 ([Functions](https://craftinginterpreters.com/functions.html))
 We can run lox program like this:
 
 ```rust
+// prints 1 2 3 .. n
 fn count(n) {
-  if n >= 0 { return -1; }
+  if n <= 0 { return -1; }
   if n > 1 { count(n - 1); }
   print n;
 }
@@ -19,6 +20,7 @@ count(3);
 ```
 
 ## Overview of the book
+
 To be written.
 
 - Recursive descent parer 
@@ -46,3 +48,13 @@ To be written.
         - efficiency? 
 - runtime (treewalk) 
     - using visitor pattern vs just `match` to statements 
+
+### Performance
+
+To be written.
+
+- Can we reduce the number of cloning without using references? 
+    - And is it really better for performance? 
+- When cloning is done in loxrs? 
+    - AST -> runtime object: 
+        - when defining functions: clones all the statemenst in the block 
