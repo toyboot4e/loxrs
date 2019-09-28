@@ -146,13 +146,13 @@ impl StmtVisitor<Result<Option<LoxObj>>> for Interpreter {
         }
     }
 
-    fn visit_block_stmt(&mut self, block: &BlockArgs, env: Option<Env>) -> Result<Option<LoxObj>> {
+    fn visit_block_stmt(&mut self, stmts: &Vec<Stmt>, env: Option<Env>) -> Result<Option<LoxObj>> {
         let env = env.unwrap_or_else(|| Env::from_parent(&self.env));
 
         let prev = Rc::clone(&self.env);
         self.env = Rc::new(RefCell::new(env));
 
-        for stmt in block.stmts.iter() {
+        for stmt in stmts.iter() {
             // early return for `return` statement
             match self.interpret(stmt)? {
                 Some(obj) => {
@@ -171,15 +171,16 @@ impl StmtVisitor<Result<Option<LoxObj>>> for Interpreter {
 
     fn visit_while_stmt(&mut self, while_: &WhileArgs) -> Result<Option<LoxObj>> {
         while self.eval_expr(&while_.condition)?.is_truthy() {
-            self.visit_block_stmt(&while_.block, None)?;
+            self.visit_block_stmt(&while_.block.stmts, None)?;
         }
         Ok(None)
     }
 
-    fn visit_fn_decl(&mut self, f: &FnDef) -> Result<Option<LoxObj>> {
+    fn visit_fn_decl(&mut self, def: &FnDef) -> Result<Option<LoxObj>> {
+        let f = LoxObj::f(def, &self.env);
         self.env
             .borrow_mut()
-            .define(f.name.as_str(), LoxObj::f(f))?;
+            .define(def.name.as_str(), f)?;
         Ok(None)
     }
 }

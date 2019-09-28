@@ -39,7 +39,7 @@ pub trait StmtVisitor<T> {
             Print(print) => self.visit_print_stmt(print),
             Var(var) => self.visit_var_decl(var),
             If(if_) => self.visit_if_stmt(if_),
-            Block(block) => self.visit_block_stmt(block, None),
+            Block(block) => self.visit_block_stmt(block.stmts.as_ref(), None),
             Return(ret) => self.visit_return_stmt(ret),
             While(while_) => self.visit_while_stmt(while_),
             Fn(f) => self.visit_fn_decl(f),
@@ -53,7 +53,7 @@ pub trait StmtVisitor<T> {
     fn visit_print_stmt(&mut self, print: &PrintArgs) -> T;
     fn visit_if_stmt(&mut self, if_: &IfArgs) -> T;
     /// We need local scope for function blocks
-    fn visit_block_stmt(&mut self, block: &BlockArgs, env: Option<Env>) -> T;
+    fn visit_block_stmt(&mut self, stmts: &Vec<Stmt>, env: Option<Env>) -> T;
     fn visit_return_stmt(&mut self, ret: &Return) -> T;
     fn visit_while_stmt(&mut self, while_: &WhileArgs) -> T;
     // TODO: disable clock as a variable name? (or distinguish two scopes like Lisp 2?)

@@ -1,7 +1,10 @@
 //! Object (value, variable or function) definitions
 
 use crate::ast::expr::*;
-use crate::ast::stmt::FnDef;
+use crate::ast::stmt::{FnDef, Params, Stmt};
+use crate::runtime::env::Env;
+use ::std::rc::Rc;
+use ::std::cell::RefCell;
 
 /// Anything evaluated (from AST) at runtime
 ///
@@ -9,16 +12,15 @@ use crate::ast::stmt::FnDef;
 ///         | NUMBER | STRING
 ///         | "(" expression ")"
 ///         | IDENTIFIER ;
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum LoxObj {
     Value(LoxValue),
     Callable(LoxFn),
 }
 
 impl LoxObj {
-    pub fn f(f: &FnDef) -> Self {
-        // TODO: not to clone when defining a function
-        LoxObj::Callable(LoxFn::User(f.clone()))
+    pub fn f(def: &FnDef, closure: &Rc<RefCell<Env>>) -> Self {
+        LoxObj::Callable(LoxFn::User(LoxUserFn::from_def(def, closure)))
     }
 }
 
@@ -91,12 +93,33 @@ impl LoxObj {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum LoxFn {
-    User(FnDef),
+    /// User defined function
+    User(LoxUserFn),
     // TOOD: define it in globals
     // TOOD: print as a native function
     /// A native function embedded in rulox
     Clock,
     // Native(String, Option<Args>),
+}
+
+/// User defined function
+#[derive(Clone, Debug)]
+pub struct LoxUserFn {
+    pub body: Vec<Stmt>,
+    pub params: Option<Params>,
+    // TODO: disable mutation
+    pub closure: Rc<RefCell<Env>>,
+}
+
+impl LoxUserFn {
+    pub fn from_def(def: &FnDef, closure: &Rc<RefCell<Env>>) -> Self {
+        // TODO: avoid cloning?
+        Self {
+            body: def.body.stmts.clone(),
+            params: def.params.clone(),
+            closure: Rc::clone(closure),
+        }
+    }
 }
