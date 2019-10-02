@@ -3,6 +3,7 @@ use crate::ast::expr::Expr;
 // TODO: use proper places for function definitions
 pub type Params = Vec<String>;
 
+/// Function definition translated to AST
 #[derive(Clone, Debug, PartialEq)]
 pub struct FnDef {
     pub name: String,

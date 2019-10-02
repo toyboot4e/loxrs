@@ -1,27 +1,29 @@
 //! Object (value, variable or function) definitions
 
 use crate::ast::expr::*;
-use crate::ast::stmt::FnDef;
+use crate::ast::stmt::{FnDef, Params, Stmt};
+use crate::runtime::env::Env;
+use ::std::cell::RefCell;
+use ::std::rc::Rc;
 
-/// Anything evaluated (from AST) at runtime
-///
-/// primary → "true" | "false" | "nil"
-///         | NUMBER | STRING
-///         | "(" expression ")"
-///         | IDENTIFIER ;
-#[derive(Clone, Debug, PartialEq)]
+/// Runtime object which represents anything
+#[derive(Clone, Debug)]
 pub enum LoxObj {
     Value(LoxValue),
     Callable(LoxFn),
 }
 
 impl LoxObj {
-    pub fn f(f: &FnDef) -> Self {
-        // TODO: not to clone when defining a function
-        LoxObj::Callable(LoxFn::User(f.clone()))
+    pub fn nil() -> Self {
+        LoxObj::Value(LoxValue::Nil)
+    }
+
+    pub fn f(def: &FnDef, closure: &Rc<RefCell<Env>>) -> Self {
+        LoxObj::Callable(LoxFn::User(LoxUserFn::from_def(def, closure)))
     }
 }
 
+/// Runtime value
 // TODO: use traits and share instances between `LoxObj` & `LiteralArgs`
 #[derive(Clone, Debug, PartialEq)]
 pub enum LoxValue {
@@ -91,12 +93,33 @@ impl LoxObj {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+/// Runtime function object
+#[derive(Clone, Debug)]
 pub enum LoxFn {
-    User(FnDef),
-    // TOOD: define it in globals
-    // TOOD: print as a native function
+    /// User defined function
+    User(LoxUserFn),
     /// A native function embedded in rulox
     Clock,
+    // /// Generic native function identifier
     // Native(String, Option<Args>),
+}
+
+/// Runtime user-defined function
+#[derive(Clone, Debug)]
+pub struct LoxUserFn {
+    pub body: Vec<Stmt>,
+    pub params: Option<Params>,
+    // TODO: disable mutation
+    pub closure: Rc<RefCell<Env>>,
+}
+
+impl LoxUserFn {
+    pub fn from_def(def: &FnDef, closure: &Rc<RefCell<Env>>) -> Self {
+        let env = Env::from_parent(&closure);
+        Self {
+            body: def.body.stmts.clone(),
+            params: def.params.clone(),
+            closure: Rc::clone(closure),
+        }
+    }
 }

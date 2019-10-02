@@ -80,7 +80,7 @@ impl PrettyPrint for LiteralArgs {
                     "false".into()
                 }
             }
-            StringLit(ref s) => s.clone(),
+            StringLit(ref s) => format!("\"{}\"", s),
             Number(n) => n.to_string(),
         }
     }
@@ -147,25 +147,6 @@ impl PrettyPrint for CallArgs {
     }
 }
 
-#[cfg(test)]
-mod test {
-    /// Tests this: (* (- 123) (group 45.67))
-    #[test]
-    fn test_in_part_5() {
-        use crate::ast::expr::*;
-        use crate::ast::pretty_printer::*;
-        println!(
-            "{}",
-            Expr::binary(
-                Expr::unary(UnaryOper::Minus, Expr::literal(123.0.into())),
-                BinaryOper::Mul,
-                Expr::group(Expr::literal(45.67.into())),
-            )
-            .pretty_print()
-        );
-    }
-}
-
 use crate::ast::stmt::*;
 
 impl PrettyPrint for BlockArgs {
@@ -187,7 +168,7 @@ impl PrettyPrint for Stmt {
         use Stmt::*;
         match *self {
             Expr(ref expr) => format!("(expr {})", expr.pretty_print()),
-            Print(ref print) => format!("(print \"{}\")", print.expr.pretty_print()),
+            Print(ref print) => format!("(print {})", print.expr.pretty_print()),
             Var(ref var) => format!("(var {} {})", var.name, var.init.pretty_print()),
             If(ref if_) => format!(
                 "(if {} {} {})",
@@ -237,7 +218,7 @@ impl PrettyPrint for LoxValue {
                     "false".into()
                 }
             }
-            LoxValue::StringLit(ref s) => s.clone(),
+            LoxValue::StringLit(ref s) => format!("\"{}\"", s.clone()),
             LoxValue::Number(n) => n.to_string(),
         }
     }
@@ -257,3 +238,24 @@ impl PrettyPrint for LoxFn {
         "(fn)".into()
     }
 }
+
+/// Tests expression printing
+#[cfg(test)]
+mod test {
+    /// Tests this: (* (- 123) (group 45.67))
+    #[test]
+    fn test_in_part_5() {
+        use crate::ast::expr::*;
+        use crate::ast::pretty_printer::*;
+        println!(
+            "{}",
+            Expr::binary(
+                Expr::unary(UnaryOper::Minus, Expr::literal(123.0.into())),
+                BinaryOper::Mul,
+                Expr::group(Expr::literal(45.67.into())),
+            )
+            .pretty_print()
+        );
+    }
+}
+

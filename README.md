@@ -2,11 +2,11 @@
 
 Yet another hobby project to follow the book [Crafting Interpreters](http://www.craftinginterpreters.com/) in Rust.
 
-Now doing: Ch.10 ([Functions](https://craftinginterpreters.com/functions.html))
+Now doing: Ch.11 ([Resolving and Binding](https://craftinginterpreters.com/resolving-and-binding.html))
 
 ## Examples
 
-We can run lox program like this:
+We can run lox program such as:
 
 ```rust
 // prints 1 2 3 .. n
@@ -23,8 +23,9 @@ count(3);
 
 To be written.
 
-- Recursive descent parer 
-- What will be implemented and what are not? 
+- What will be implemented and what will be not? 
+- Part 2: tree-walk interpreter 
+    - Recursive descent parer 
 
 ## Notes on the implementation
 
@@ -58,3 +59,7 @@ To be written.
 - When cloning is done in loxrs? 
     - AST -> runtime object: 
         - when defining functions: clones all the statemenst in the block 
+
+## TODO
+- part 2 
+- challenges 

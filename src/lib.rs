@@ -110,6 +110,8 @@ pub fn interpret(stmts: &mut [Stmt]) {
             println!("\n====== runtime errors =====");
             println!("at {}, {:?}", i, err);
         }
-        None => {}
+        None => {
+            //
+        }
     }
 }
