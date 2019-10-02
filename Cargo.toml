@@ -7,7 +7,7 @@ description = "An implementation of the Lox language in Rust"
 
 [[bin]]
 name = "loxrs"
-path = "bin/main.rs"
+path = "src/main.rs"
 
 [dependencies]
 log = "0.4.0"

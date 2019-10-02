@@ -6,7 +6,7 @@ Now doing: Ch.10 ([Functions](https://craftinginterpreters.com/functions.html))
 
 ## Examples
 
-We can run lox program like this:
+We can run Lox program like this:
 
 ```rust
 // prints 1 2 3 .. n
@@ -21,12 +21,14 @@ count(3);
 
 ## Overview of the book
 
-To be written.
+To be written..
 
 - Recursive descent parer 
 - What will be implemented and what are not? 
 
 ## Notes on the implementation
+
+To be written..
 
 ### Differences from the original Lox
 
@@ -35,26 +37,31 @@ To be written.
 - Change: using early returs instead of making `return` as an exception 
 - Skipped: `for` statement (maybe make range-based one later instead) 
 
-### Rust specigic tips (for me)
+### Rust specigic tips (just for me)
 
 - structuring 
     - decoupling the runtime (treewalk) from the lexer 
 - lexer (scanner and parser) 
     - binary-based source iterator? 
     - using [itertools](https://docs.rs/itertools/0.8.0/itertools/)::multipeek for Scanner 
+    - `try_xxx` method uses `map_err`: but it's faster to map when returning, which reduces `None` checking 
     - using [Box](https://doc.rust-lang.org/std/boxed/struct.Box.html) to make `struct`s [Sized](https://doc.rust-lang.org/std/marker/trait.Sized.html) 
         - where to place `Box`?: in a super node (I chose) or sub nodes? 
     - right recursive parsing with higher order functions 
         - efficiency? 
 - runtime (treewalk) 
     - using visitor pattern vs just `match` to statements 
+    - enable both `Rc<Refcell<X>>` and `Rc<X>` for same `x: X`?? 
 
 ### Performance
 
-To be written.
+To be written..
 
-- Can we reduce the number of cloning without using references? 
+- Can we reduce the number of cloning without? 
     - And is it really better for performance? 
 - When cloning is done in loxrs? 
     - AST -> runtime object: 
-        - when defining functions: clones all the statemenst in the block 
+        - when defining functions: **clones all the statemenst in the block** 
+- how to do benchmarking test? 
+    - See the book 
+    - Look for a crate 
