@@ -11,6 +11,8 @@ pub enum Token {
     Dot,
     Minus,
     Plus,
+    // MinusEqual,
+    // PlusEqual,
     Semicolon,
     // slash / star vs mul / div
     Slash,
@@ -36,7 +38,7 @@ pub enum Token {
     Class,
     Else,
     False,
-    Fun,
+    Fn,
     For,
     If,
     Nil,

@@ -159,7 +159,7 @@ pub enum ScanError {
 }
 
 pub struct Scanner<'a> {
-    state: hidden::ScanState<Chars<'a>>,
+    state: self::hidden::ScanState<Chars<'a>>,
 }
 
 /// Scanner implementation
@@ -167,7 +167,7 @@ impl<'a> Scanner<'a> {
     // TODO: make Scanner not to be owned
     pub fn new(src: &'a str) -> Self {
         Self {
-            state: hidden::ScanState::new(src),
+            state: self::hidden::ScanState::new(src),
         }
     }
 
@@ -247,8 +247,16 @@ impl<'a> Scanner<'a> {
 
     fn scan_cmp(&mut self, expected: char, if_true: Token, if_false: Token) -> Result<Token> {
         self.state
-            .next()
-            .map(|c| if c == expected { if_true } else { if_false })
+            .peek()
+            .map(|c| c.clone())
+            .map(|c| {
+                if c == expected {
+                    self.state.next();
+                    if_true
+                } else {
+                    if_false
+                }
+            })
             .ok_or_else(|| ScanError::UnexpectedEof(self.state.pos()))
     }
 
@@ -321,7 +329,7 @@ impl<'a> Scanner<'a> {
             "else" => Else,
             "false" => False,
             "for" => For,
-            "fun" => Fun,
+            "fn" => Fn,
             "if" => If,
             "nil" => Nil,
             "or" => Or,

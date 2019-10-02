@@ -1,15 +1,37 @@
 use crate::ast::expr::Expr;
 
-// FIXME: where to box
+// TODO: use proper places for function definitions
+pub type Params = Vec<String>;
+
+/// Function definition translated to AST
+#[derive(Clone, Debug, PartialEq)]
+pub struct FnDef {
+    pub name: String,
+    pub body: BlockArgs,        // Vec
+    pub params: Option<Params>, // Vec
+}
+
+impl FnDef {
+    pub fn new(name: String, body: BlockArgs, params: Option<Params>) -> Self {
+        Self {
+            name: name,
+            body: body,
+            params: params,
+        }
+    }
+}
+
 /// Stmt → expr | if | print | block ;
 #[derive(Clone, Debug, PartialEq)]
 pub enum Stmt {
     /// exprStmt  → expression ";" ;
     Expr(Expr),
+    Fn(FnDef),
     /// printStmt → "print" expression ";" ;
     Print(PrintArgs),
     Var(VarDecArgs),
     If(Box<IfArgs>),
+    Return(Return),
     While(WhileArgs),
     Block(BlockArgs),
 }
@@ -36,20 +58,18 @@ impl Stmt {
     }
 
     pub fn block(stmts: Vec<Stmt>) -> Self {
-        Stmt::Block(
-            BlockArgs {
-                stmts: stmts,
-            }
-        )
+        Stmt::Block(BlockArgs { stmts: stmts })
+    }
+
+    pub fn return_(expr: Expr) -> Self {
+        Stmt::Return(Return { expr: expr })
     }
 
     pub fn while_(condition: Expr, block: BlockArgs) -> Self {
-        Stmt::While(
-            WhileArgs {
-                condition: condition,
-                block: block
-            }
-        )
+        Stmt::While(WhileArgs {
+            condition: condition,
+            block: block,
+        })
     }
 }
 
@@ -105,6 +125,11 @@ impl BlockArgs {
     pub fn into_stmt(self) -> Stmt {
         Stmt::Block(self)
     }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Return {
+    pub expr: Expr,
 }
 
 #[derive(Clone, Debug, PartialEq)]

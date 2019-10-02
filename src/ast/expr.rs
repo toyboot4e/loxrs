@@ -1,4 +1,3 @@
-use crate::lexer::parser::ParseError;
 use crate::lexer::token::Token;
 use std::convert::From;
 
@@ -11,6 +10,7 @@ pub enum Expr {
     Grouping(Box<GroupingArgs>),
     Variable(String),
     Assign(Box<AssignArgs>),
+    Call(Box<CallArgs>),
 }
 
 /// Helpers for constructing / right recursive parsing
@@ -51,14 +51,18 @@ impl Expr {
         Expr::Variable(name.to_string())
     }
 
-    pub fn assign(left: Expr, oper: AssignOper, right: Expr) -> Result<Expr, ParseError> {
-        match left {
-            Expr::Variable(ref name) => Ok(Expr::Assign(Box::new(AssignArgs {
-                name: name.to_string(),
-                expr: right,
-            }))),
-            _ => Err(ParseError::NotAssignable(left)),
-        }
+    pub fn assign(name: impl Into<String>, expr: Expr) -> Expr {
+        Expr::Assign(Box::new(AssignArgs {
+            name: name.into(),
+            expr: expr,
+        }))
+    }
+
+    pub fn call(callee: Expr, args: Option<Args>) -> Self {
+        Expr::Call(Box::new(CallArgs {
+            callee: callee,
+            args: args,
+        }))
     }
 }
 
@@ -72,7 +76,7 @@ impl From<LiteralArgs> for Expr {
 pub enum LiteralArgs {
     Nil,
     Bool(bool),
-    StringL(String),
+    StringLit(String),
     Number(f64),
 }
 
@@ -83,7 +87,7 @@ impl LiteralArgs {
             Nil => LiteralArgs::Nil,
             True => LiteralArgs::Bool(true),
             False => LiteralArgs::Bool(false),
-            String(ref s) => LiteralArgs::StringL(s.clone()),
+            String(ref s) => LiteralArgs::StringLit(s.clone()),
             Number(n) => LiteralArgs::Number(n.clone()),
             _ => return None,
         })
@@ -99,7 +103,7 @@ impl From<f64> for LiteralArgs {
 
 impl From<String> for LiteralArgs {
     fn from(item: String) -> Self {
-        LiteralArgs::StringL(item)
+        LiteralArgs::StringLit(item)
     }
 }
 
@@ -235,3 +239,11 @@ impl From<Token> for Option<AssignOper> {
         })
     }
 }
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CallArgs {
+    pub callee: Expr,
+    pub args: Option<Args>,
+}
+
+pub type Args = Vec<Expr>;

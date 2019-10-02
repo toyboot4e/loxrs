@@ -1,0 +1,11 @@
+// recursive fibonacci function (slow but good for benchmarking)
+fn fib(n) {
+  if n <= 1 { return n; }
+  return fib(n - 2) + fib(n - 1);
+}
+
+var i = 0;
+while i < 20 {
+  print fib(i);
+  i = i + 1;
+}
