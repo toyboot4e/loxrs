@@ -1,5 +1,3 @@
-// TODO: consider early return from a file (by implicitely wrapping AST with block)
-
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::SystemTime;
@@ -14,35 +12,35 @@ use crate::runtime::{
     Result, RuntimeError,
 };
 
+// TODO: encapsulate `Rc<Refcell<T>>`
 pub struct Interpreter {
     /// Points to the global `Env`
     globals: Rc<RefCell<Env>>,
     /// Temporary `Env` for proessing
-    env: Rc<RefCell<Env>>,
-    /// Enables `clock` native function
-    on_begin: SystemTime,
+    pub env: Rc<RefCell<Env>>,
+    /// When the interpretation started; enables `clock` native function
+    begin_time: SystemTime,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
-        let globals = Self::global_env();
-        let globals = Rc::new(RefCell::new(globals));
+        let globals = Rc::new(RefCell::new(Self::global_env()));
         let env = Rc::new(RefCell::new(Env::from_parent(&globals)));
         Self {
             globals: globals,
             env: env,
-            on_begin: SystemTime::now(),
+            begin_time: SystemTime::now(),
         }
     }
 
-    /// Make native functions dispatchable (via `env.get`)
+    /// Creates a new `Env` with native functions
     fn global_env() -> Env {
         let mut env = Env::new();
         env.define("clock", LoxObj::Callable(LoxFn::Clock)).unwrap();
         env
     }
 
-    /// Statement interpretation with Visitor pattern
+    /// The entry point of interpretation
     pub fn interpret(&mut self, stmt: &Stmt) -> Result<Option<LoxObj>> {
         self.visit_stmt(stmt)
     }
@@ -62,19 +60,19 @@ impl Interpreter {
             args.as_ref().map(|xs| xs.len()),
         )?;
 
-        // FIXME: enable nesting environments (scope: implemented in Ch. 11)
-        let mut env = Env::from_parent(&self.env);
+        // create new environment with the arguments
+        let mut new_env = Env::from_parent(&self.env);
         if let (Some(params), Some(args)) = (&def.params, args) {
             for i in 0..params.len() {
-                env.define(params[i].as_str(), self.eval_expr(&args[i])?)?;
+                new_env.define(params[i].as_str(), self.eval_expr(&args[i])?)?;
             }
         }
 
-        self.visit_block_stmt(&def.body, Some(env))?;
-        Ok(None)
+        let result = self.visit_block_stmt(&def.body, Some(new_env))?;
+        Ok(result)
     }
 
-    /// Compares two arities (may be None) and validate them
+    /// Compares two arities (each of which may be None) and makes sure they match
     fn validate_arities(n1: Option<usize>, n2: Option<usize>) -> Result<Option<LoxObj>> {
         match (n1, n2) {
             (None, None) => Ok(None),
@@ -93,7 +91,7 @@ impl Interpreter {
         }
         Ok(LoxValue::Number(
             //self.on_begin.elapsed().unwrap().as_secs() as f64
-            self.on_begin.elapsed().unwrap().as_millis() as f64,
+            self.begin_time.elapsed().unwrap().as_millis() as f64,
         ))
     }
 }
@@ -124,7 +122,6 @@ impl StmtVisitor<Result<Option<LoxObj>>> for Interpreter {
 
     fn visit_print_stmt(&mut self, print: &PrintArgs) -> Result<Option<LoxObj>> {
         let obj = self.eval_expr(&print.expr)?;
-        // println!("{}", expr.pretty_print());
         println!("{}", obj.pretty_print());
         Ok(None)
     }
@@ -146,24 +143,31 @@ impl StmtVisitor<Result<Option<LoxObj>>> for Interpreter {
         }
     }
 
-    fn visit_block_stmt(&mut self, stmts: &Vec<Stmt>, env: Option<Env>) -> Result<Option<LoxObj>> {
-        let env = env.unwrap_or_else(|| Env::from_parent(&self.env));
+    fn visit_block_stmt(
+        &mut self,
+        stmts: &Vec<Stmt>,
+        new_env: Option<Env>,
+    ) -> Result<Option<LoxObj>> {
+        let new_env = new_env.unwrap_or_else(|| Env::from_parent(&self.env));
 
         let prev = Rc::clone(&self.env);
-        self.env = Rc::new(RefCell::new(env));
+        self.env = Rc::new(RefCell::new(new_env));
 
         for stmt in stmts.iter() {
-            // early return for `return` statement
+            // early return considered
             match self.interpret(stmt)? {
                 Some(obj) => {
+                    self.env = prev;
                     return Ok(Some(obj));
                 }
                 None => {}
             }
         }
+        self.env = prev;
         Ok(None)
     }
 
+    // TODO: enable returning even outside block
     fn visit_return_stmt(&mut self, ret: &Return) -> Result<Option<LoxObj>> {
         let obj = self.eval_expr(&ret.expr)?;
         Ok(Some(obj))
@@ -171,6 +175,7 @@ impl StmtVisitor<Result<Option<LoxObj>>> for Interpreter {
 
     fn visit_while_stmt(&mut self, while_: &WhileArgs) -> Result<Option<LoxObj>> {
         while self.eval_expr(&while_.condition)?.is_truthy() {
+            // early return considered
             self.visit_block_stmt(&while_.block.stmts, None)?;
         }
         Ok(None)
@@ -178,9 +183,7 @@ impl StmtVisitor<Result<Option<LoxObj>>> for Interpreter {
 
     fn visit_fn_decl(&mut self, def: &FnDef) -> Result<Option<LoxObj>> {
         let f = LoxObj::f(def, &self.env);
-        self.env
-            .borrow_mut()
-            .define(def.name.as_str(), f)?;
+        self.env.borrow_mut().define(def.name.as_str(), f)?;
         Ok(None)
     }
 }
@@ -345,8 +348,7 @@ impl ExprVisitor<Result<LoxObj>> for Interpreter {
     }
 
     fn visit_var_expr(&mut self, name: &str) -> Result<LoxObj> {
-        let env = self.env.borrow_mut();
-        env.get(name)
+        self.env.borrow().get(name)
     }
 
     fn visit_assign_expr(&mut self, assign: &AssignArgs) -> Result<LoxObj> {
@@ -359,8 +361,8 @@ impl ExprVisitor<Result<LoxObj>> for Interpreter {
 
     fn visit_call_expr(&mut self, call: &CallArgs) -> Result<LoxObj> {
         if let LoxObj::Callable(ref fn_obj) = self.eval_expr(&call.callee)? {
-            self.invoke(fn_obj, &call.args)?;
-            Ok(LoxObj::Value(LoxValue::Nil))
+            let obj = self.invoke(fn_obj, &call.args)?.unwrap_or_else(|| LoxObj::nil());
+            Ok(obj)
         } else {
             Err(RuntimeError::MismatchedType)
         }

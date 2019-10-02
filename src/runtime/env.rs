@@ -5,6 +5,7 @@ use ::std::rc::{Rc, Weak};
 
 type Result<T> = ::std::result::Result<T, RuntimeError>;
 
+#[derive(Clone, Debug)]
 pub struct Env {
     /// Objects; variables or functions
     map: RefCell<HashMap<String, LoxObj>>,
