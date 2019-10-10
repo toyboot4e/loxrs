@@ -2,7 +2,7 @@
 
 Yet another hobby project to follow the book [Crafting Interpreters](http://www.craftinginterpreters.com/) in Rust.
 
-Now doing: Ch.11 ([Resolving and Binding](https://craftinginterpreters.com/resolving-and-binding.html))
+Now on: Ch.11 [Resolving and Binding](https://craftinginterpreters.com/resolving-and-binding.html)
 
 ## Examples
 
@@ -11,7 +11,7 @@ We can run lox program such as:
 ```rust
 // prints 1 2 3 .. n
 fn count(n) {
-  if n <= 0 { return -1; }
+  if n <= 0 { return; }
   if n > 1 { count(n - 1); }
   print n;
 }
