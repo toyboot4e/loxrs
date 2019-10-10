@@ -1,4 +1,4 @@
-use crate::runtime::{RuntimeError, obj::LoxObj};
+use crate::runtime::{obj::LoxObj, RuntimeError};
 use ::std::cell::RefCell;
 use ::std::collections::HashMap;
 use ::std::rc::{Rc, Weak};
@@ -28,9 +28,9 @@ impl Env {
         }
     }
 
-    // TODO: check non-recursive solution in CLox
-    // TODO: `get` without cloning
-    /// Looks up enclosing environment and clones the found object
+    // TODO: check non-recursive solution in CLox and compare with it
+    // TODO: `get` without cloning?
+    /// Looks up in this or enclosing environment and clones the found object
     pub fn get(&self, name: &str) -> Result<LoxObj> {
         match self.map.borrow().get(name) {
             Some(obj) => Ok(obj.clone()),
@@ -39,6 +39,11 @@ impl Env {
                 None => Err(RuntimeError::Undefined(name.to_string())),
             },
         }
+    }
+
+    /// Looks up *this* environment, doesn't looking into enclosing ones
+    pub fn contains(&self, name: &str) -> bool {
+        self.map.borrow().get(name).is_some()
     }
 
     pub fn define(&mut self, name: &str, obj: LoxObj) -> Result<()> {

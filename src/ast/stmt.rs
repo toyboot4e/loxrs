@@ -101,8 +101,10 @@ pub struct VarDecArgs {
 #[derive(Clone, Debug, PartialEq)]
 pub struct IfArgs {
     pub condition: Expr,
+    // branches
+    /// True branch
     pub if_true: Stmt,
-    /// May be `if`
+    /// Else branch. If it's `if`, the branch means `if else`.
     pub if_false: Option<Stmt>,
 }
 
