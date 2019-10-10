@@ -7,6 +7,7 @@
 mod ast;
 mod lexer;
 mod runtime;
+mod analizer;
 
 use crate::ast::stmt::Stmt;
 use crate::ast::PrettyPrint;
