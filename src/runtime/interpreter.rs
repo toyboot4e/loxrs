@@ -1,6 +1,7 @@
-use std::cell::RefCell;
-use std::rc::Rc;
-use std::time::SystemTime;
+use ::std::cell::RefCell;
+use ::std::collections::HashMap;
+use ::std::rc::Rc;
+use ::std::time::SystemTime;
 
 use super::env::Env;
 use super::visitor::StmtVisitor;
@@ -18,8 +19,21 @@ pub struct Interpreter {
     globals: Rc<RefCell<Env>>,
     /// Temporary `Env` for proessing
     pub env: Rc<RefCell<Env>>,
-    /// When the interpretation started; enables `clock` native function
+    /// When the interpretation started. Enables `clock` native function.
     begin_time: SystemTime,
+    /// Maps each `Expr` to the distance to the scope it's in.
+    pub locals: HashMap<Expr, usize>,
+}
+
+/// High performance methods thanks to the `Resolver`
+impl Interpreter {
+    fn lookup_var(&self, name: &str, expr: &Expr) -> Result<LoxObj> {
+        if let Some(d) = self.locals.get(expr) {
+            self.env.borrow().get_resolved(name, d.clone())
+        } else {
+            self.globals.borrow().get(name)
+        }
+    }
 }
 
 impl Interpreter {
@@ -30,6 +44,7 @@ impl Interpreter {
             globals: globals,
             env: env,
             begin_time: SystemTime::now(),
+            locals: HashMap::new(),
         }
     }
 
@@ -361,7 +376,9 @@ impl ExprVisitor<Result<LoxObj>> for Interpreter {
 
     fn visit_call_expr(&mut self, call: &CallArgs) -> Result<LoxObj> {
         if let LoxObj::Callable(ref fn_obj) = self.eval_expr(&call.callee)? {
-            let obj = self.invoke(fn_obj, &call.args)?.unwrap_or_else(|| LoxObj::nil());
+            let obj = self
+                .invoke(fn_obj, &call.args)?
+                .unwrap_or_else(|| LoxObj::nil());
             Ok(obj)
         } else {
             Err(RuntimeError::MismatchedType)

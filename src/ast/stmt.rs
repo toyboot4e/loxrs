@@ -61,6 +61,7 @@ impl Stmt {
         Stmt::Block(BlockArgs { stmts: stmts })
     }
 
+    /// Even if a function returns nothing, it returns `Some(LoxObj::Nul)` internally
     pub fn return_(expr: Expr) -> Self {
         Stmt::Return(Return { expr: expr })
     }
@@ -129,6 +130,7 @@ impl BlockArgs {
     }
 }
 
+/// Even if a function returns nothing, it returns `Some(LoxObj::Nul)` internally
 #[derive(Clone, Debug, PartialEq)]
 pub struct Return {
     pub expr: Expr,

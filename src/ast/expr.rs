@@ -1,7 +1,9 @@
 use crate::lexer::token::Token;
 use std::convert::From;
 
-#[derive(Clone, Debug, PartialEq)]
+// We need to make `Expr` hashable so that we can map `Expr` to distance
+// in `Resolver`.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Expr {
     Literal(LiteralArgs),
     Unary(Box<UnaryArgs>),
@@ -113,13 +115,13 @@ impl From<bool> for LiteralArgs {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct UnaryArgs {
     pub oper: UnaryOper,
     pub expr: Expr,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum UnaryOper {
     Not,
     Minus,
@@ -136,14 +138,14 @@ impl From<Token> for Option<UnaryOper> {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BinaryArgs {
     pub left: Expr,
     pub oper: BinaryOper,
     pub right: Expr,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum BinaryOper {
     Minus,
     Plus,
@@ -187,14 +189,14 @@ impl From<Token> for Option<BinaryOper> {
 }
 
 /// `&&` or `||`
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct LogicArgs {
     pub left: Expr,
     pub oper: LogicOper,
     pub right: Expr,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum LogicOper {
     Or,
     And,
@@ -212,20 +214,20 @@ impl From<Token> for Option<LogicOper> {
 }
 
 /// `()`
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct GroupingArgs {
     pub expr: Expr,
 }
 
 /// `=`,  only parsed as an expression statement.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct AssignArgs {
     /// Name of the identifier to assign
     pub name: String,
     pub expr: Expr,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum AssignOper {
     Equal,
 }
@@ -240,10 +242,11 @@ impl From<Token> for Option<AssignOper> {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+pub type Args = Vec<Expr>;
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct CallArgs {
     pub callee: Expr,
     pub args: Option<Args>,
 }
 
-pub type Args = Vec<Expr>;
