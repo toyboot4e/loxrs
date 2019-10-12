@@ -1,0 +1,14 @@
+print "global -> global -> block";
+
+var a = "global";
+{
+  fn showA() {
+    print a;
+  }
+
+  showA();
+  var a = "block";
+  showA();
+  print a;
+}
+

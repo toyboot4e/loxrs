@@ -3,14 +3,15 @@ use std::convert::From;
 
 // We need to make `Expr` hashable so that we can map `Expr` to distance
 // in `Resolver`.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Expr {
     Literal(LiteralArgs),
     Unary(Box<UnaryArgs>),
     Binary(Box<BinaryArgs>),
     Logic(Box<LogicArgs>),
     Grouping(Box<GroupingArgs>),
-    Variable(String),
+    // TODO: rename me; it may be function
+    Variable(VariableArgs),
     Assign(Box<AssignArgs>),
     Call(Box<CallArgs>),
 }
@@ -50,12 +51,12 @@ impl Expr {
     }
 
     pub fn var(name: &str) -> Expr {
-        Expr::Variable(name.to_string())
+        Expr::Variable(VariableArgs::new(name))
     }
 
-    pub fn assign(name: impl Into<String>, expr: Expr) -> Expr {
+    pub fn assign(name: &str, expr: Expr) -> Expr {
         Expr::Assign(Box::new(AssignArgs {
-            name: name.into(),
+            assigned: VariableArgs::new(name),
             expr: expr,
         }))
     }
@@ -115,13 +116,13 @@ impl From<bool> for LiteralArgs {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct UnaryArgs {
     pub oper: UnaryOper,
     pub expr: Expr,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum UnaryOper {
     Not,
     Minus,
@@ -138,14 +139,14 @@ impl From<Token> for Option<UnaryOper> {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct BinaryArgs {
     pub left: Expr,
     pub oper: BinaryOper,
     pub right: Expr,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum BinaryOper {
     Minus,
     Plus,
@@ -189,14 +190,14 @@ impl From<Token> for Option<BinaryOper> {
 }
 
 /// `&&` or `||`
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct LogicArgs {
     pub left: Expr,
     pub oper: LogicOper,
     pub right: Expr,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum LogicOper {
     Or,
     And,
@@ -214,20 +215,36 @@ impl From<Token> for Option<LogicOper> {
 }
 
 /// `()`
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct GroupingArgs {
     pub expr: Expr,
 }
 
-/// `=`,  only parsed as an expression statement.
+pub struct VariableIdentifierForAst(usize);
+impl VariableIdentifierForAst {}
+
+/// An expression identifier in AST.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct AssignArgs {
-    /// Name of the identifier to assign
+pub struct VariableArgs {
     pub name: String,
+}
+
+impl VariableArgs {
+    pub fn new(name: &str) -> Self {
+        Self {
+            name: name.to_string(),
+        }
+    }
+}
+
+/// `=`,  only parsed as an expression statement.
+#[derive(Clone, Debug, PartialEq)]
+pub struct AssignArgs {
+    pub assigned: VariableArgs,
     pub expr: Expr,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum AssignOper {
     Equal,
 }
@@ -244,9 +261,8 @@ impl From<Token> for Option<AssignOper> {
 
 pub type Args = Vec<Expr>;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CallArgs {
     pub callee: Expr,
     pub args: Option<Args>,
 }
-

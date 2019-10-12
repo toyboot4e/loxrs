@@ -9,7 +9,9 @@ pub enum SemantcicError {
     // TODO: reporst soure position
     Undefined(String),
     // TODO: separate recursive declaration error
-    DuplicateVariableDeclaration(String),
+    DuplicateDeclaration(String),
+    // TODO: better context (consider assining to tuple with pattern match)
+    RecursiveVariableDeclaration(String),
     ReturnFromNonFunction,
 }
 
@@ -19,43 +21,47 @@ pub enum FnType {
     Fn,
 }
 
-type Locals = HashMap<Expr, usize>;
+type Scope = HashMap<String, bool>;
+type Caches = HashMap<VariableArgs, usize>;
 
+/// Tracks objects in local scope, analizes them and provides a way to map each variable usage
+/// to specific variable in AST.
+///
+/// It was first introduced for closures.
 pub struct Resolver<'a> {
-    /// Nested scopes which maps variable names to whether it's already initialized.
-    scopes: Vec<HashMap<String, bool>>,
-    /// State to forbid returning fron non-function
+    /// Each scope maps variables to whether it's already initialzied or not.
+    /// Useful to detect recursive variable definition or duplicates.
+    scopes: Vec<Scope>,
+    /// State for function resolving.
     current_fn_type: FnType,
-    /// Caches for the result of resolving
+    /// Distances from a scope where each variable is in. Only tracks local variables (see 11.3.2
+    /// for details)
     // TODO: isize vs usize
-    locals: &'a mut Locals,
+    caches: &'a mut Caches,
 }
 
+// TODO: consider returning multiple errors
 impl<'a> Resolver<'a> {
-    pub fn new(locals: &'a mut Locals) -> Self {
+    pub fn new(caches: &'a mut Caches) -> Self {
         Self {
+            // We don't track global definitions.
+            // It begins with empty, while `Interpreter` begins with global scope.
             scopes: Vec::new(),
             current_fn_type: FnType::None,
-            locals: locals,
+            caches: caches,
         }
     }
 
-    /// Resolves an expression. To be called only from `resolve_local_var`.
-    fn impl_resolve(&mut self, expr: &Expr, d: usize) {
-        self.locals.insert(expr.clone(), d);
-    }
-
-    fn resolve_local_var(&mut self, expr: &Expr, name: &str) {
+    fn resolve_local_var(&mut self, var: &VariableArgs) {
         if let Some(d) = self
             .scopes
             .iter()
             .rev()
             .enumerate()
-            .find(|(d, s)| s.contains_key(name))
+            .find(|(d, s)| s.contains_key(&var.name))
             .map(|(d, s)| d)
         {
-            // finally, actually resolve the expression
-            self.impl_resolve(expr, d);
+            self.caches.insert(var.clone(), d);
         }
     }
 
@@ -70,14 +76,24 @@ impl<'a> Resolver<'a> {
     }
 
     /// States that the item exists but not initialized yet.
-    fn declare(&mut self, name: &str) {
-        if let Some(scope) = self.scopes.last_mut() {
-            scope.insert(name.to_string(), false);
-        };
+    /// Returns error if it finds duplicates.
+    fn declare(&mut self, name: &str) -> Result<()> {
+        if self.scopes.len() == 0 {
+            return Ok(()); // we don't track global variables (see 11.3.2 of the book for details)
+        }
+        let scope = self.scopes.last_mut().unwrap();
+        if scope.contains_key(name) {
+            return Err(SemantcicError::DuplicateDeclaration(name.to_string()));
+        }
+        scope.insert(name.to_string(), false);
+        Ok(())
     }
 
     /// States that the item is initialized. Panics if it's not declared.
     fn define(&mut self, name: &str) {
+        if self.scopes.len() == 0 {
+            return; // we don't track global variables (see 11.3.2 of the book for details)
+        }
         self.scopes
             .last_mut()
             .unwrap()
@@ -89,7 +105,18 @@ impl<'a> Resolver<'a> {
         self.visit_stmt(stmt)
     }
 
-    /// Implemented with visitor pattern
+    /// Implemented with Visitor pattern
+    pub fn resolve_expr(&mut self, expr: &Expr) -> Result<()> {
+        self.visit_expr(expr)
+    }
+
+    fn resolve_block(&mut self, stmts: &[Stmt]) -> Result<()> {
+        self.begin_scope();
+        let result = self.resolve_stmts(stmts);
+        self.end_scope();
+        result
+    }
+
     pub fn resolve_stmts(&mut self, stmts: &[Stmt]) -> Result<()> {
         for stmt in stmts {
             self.resolve_stmt(stmt)?;
@@ -97,56 +124,47 @@ impl<'a> Resolver<'a> {
         Ok(())
     }
 
-    /// Resolve the function definition updating the `Resolver`'s state
-    pub fn resolve_fn(&mut self, f: &FnDef, type_: FnType) -> Result<()> {
+    pub fn resolve_fn_args_and_body(&mut self, f: &FnDef, type_: FnType) -> Result<()> {
+        // tracking state
         let enclosing = self.current_fn_type;
         self.current_fn_type = type_;
-
-        let result = self.impl_resolve_fn(f);
+        // impl
+        self.begin_scope();
+        let result = self.impl_resolve_fn_args_and_body(f);
+        self.end_scope();
 
         self.current_fn_type = enclosing;
         result
     }
 
-    fn impl_resolve_fn(&mut self, f: &FnDef) -> Result<()> {
-        self.begin_scope();
+    fn impl_resolve_fn_args_and_body(&mut self, f: &FnDef) -> Result<()> {
         if let Some(ref params) = f.params {
             for param in params {
-                self.declare(param);
+                self.declare(param)?;
                 self.define(param);
             }
         }
-        self.resolve_stmts(&f.body.stmts)?;
-        self.end_scope();
-        Ok(())
-    }
-
-    /// Implemented with Visitor pattern
-    pub fn resolve_expr(&mut self, expr: &Expr) -> Result<()> {
-        self.visit_expr(expr)
+        self.resolve_stmts(&f.body.stmts)
     }
 }
 
 impl<'a> StmtVisitor<Result<()>> for Resolver<'a> {
     fn visit_var_decl(&mut self, var: &VarDecArgs) -> Result<()> {
-        self.declare(&var.name); // we forbid recursive variable declaration
-        self.resolve_local_var(&var.init, &var.name);
+        self.declare(&var.name)?; // we forbid recursive variable declaration
         self.define(&var.name); // now it's initialized
         Ok(())
     }
 
     fn visit_fn_decl(&mut self, f: &FnDef) -> Result<()> {
-        self.declare(&f.name);
+        self.declare(&f.name)?;
         self.define(&f.name); // we allow recursive function declaration
-        self.resolve_fn(f, FnType::Fn)?;
-        Ok(())
+        self.resolve_fn_args_and_body(f, FnType::Fn)
     }
 
     // the rest is just passing each stmt/expr to the resolving methods
 
     fn visit_expr_stmt(&mut self, expr: &Expr) -> Result<()> {
-        self.resolve_expr(expr)?;
-        Ok(())
+        self.resolve_expr(expr)
     }
 
     fn visit_if_stmt(&mut self, if_: &IfArgs) -> Result<()> {
@@ -159,42 +177,44 @@ impl<'a> StmtVisitor<Result<()>> for Resolver<'a> {
     }
 
     fn visit_print_stmt(&mut self, print: &PrintArgs) -> Result<()> {
-        self.resolve_expr(&print.expr)?;
-        Ok(())
+        self.resolve_expr(&print.expr)
     }
 
     fn visit_return_stmt(&mut self, ret: &Return) -> Result<()> {
         if self.current_fn_type == FnType::None {
             return Err(SemantcicError::ReturnFromNonFunction);
         }
-        self.resolve_expr(&ret.expr)?;
-        Ok(())
+        self.resolve_expr(&ret.expr)
     }
 
     fn visit_while_stmt(&mut self, while_: &WhileArgs) -> Result<()> {
         self.resolve_expr(&while_.condition)?;
-        self.resolve_stmts(&while_.block.stmts)?;
-        Ok(())
+        self.resolve_block(&while_.block.stmts)
     }
 
     fn visit_block_stmt(&mut self, stmts: &Vec<Stmt>, env: Option<Env>) -> Result<()> {
-        unimplemented!()
+        self.resolve_block(stmts)
     }
 }
 
 impl<'a> ExprVisitor<Result<()>> for Resolver<'a> {
-    fn visit_var_expr(&mut self, name: &str) -> Result<()> {
+    fn visit_var_expr(&mut self, var: &VariableArgs) -> Result<()> {
         // we forbid duplicate variable declaration
         if let Some(scope) = self.scopes.last() {
-            if scope.contains_key(name) {
-                return Err(SemantcicError::DuplicateVariableDeclaration(
-                    name.to_string(),
+            if scope.get(&var.name) == Some(&false) {
+                // declared but undefined
+                return Err(SemantcicError::RecursiveVariableDeclaration(
+                    var.name.to_string(),
                 ));
             }
         }
-        // TODO: consider containg Expr in the signature
-        let expr 
-        self.resolve_local_var(name);
+        self.resolve_local_var(var);
+        Ok(())
+    }
+
+    fn visit_assign_expr(&mut self, assign: &AssignArgs) -> Result<()> {
+        self.resolve_expr(&assign.expr)?;
+        self.resolve_local_var(&assign.assigned);
         Ok(())
     }
 
@@ -202,11 +222,11 @@ impl<'a> ExprVisitor<Result<()>> for Resolver<'a> {
 
     fn visit_binary_expr(&mut self, binary: &BinaryArgs) -> Result<()> {
         self.resolve_expr(&binary.left)?;
-        self.resolve_expr(&binary.right)?;
-        Ok(())
+        self.resolve_expr(&binary.right)
     }
 
     fn visit_call_expr(&mut self, call: &CallArgs) -> Result<()> {
+        self.resolve_expr(&call.callee)?;
         if let Some(ref args) = call.args {
             for arg in args {
                 self.resolve_expr(arg)?;
@@ -217,20 +237,14 @@ impl<'a> ExprVisitor<Result<()>> for Resolver<'a> {
 
     fn visit_logic_expr(&mut self, logic: &LogicArgs) -> Result<()> {
         self.resolve_expr(&logic.left)?;
-        self.resolve_expr(&logic.right)?;
-        Ok(())
+        self.resolve_expr(&logic.right)
     }
 
     fn visit_unary_expr(&mut self, unary: &UnaryArgs) -> Result<()> {
-        self.resolve_expr(&unary.expr)?;
-        Ok(())
+        self.resolve_expr(&unary.expr)
     }
 
     fn visit_literal_expr(&mut self, literal: &LiteralArgs) -> Result<()> {
-        unimplemented!()
-    }
-
-    fn visit_assign_expr(&mut self, assign: &AssignArgs) -> Result<()> {
-        unimplemented!()
+        Ok(()) // there's no variable mentioned
     }
 }

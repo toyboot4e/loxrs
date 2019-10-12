@@ -72,27 +72,33 @@ impl Env {
 
 /// Efficient methods trusting Resolver's work
 impl Env {
-    /// Looks up an enclosing environment in a distance, trusting the length.
-    /// Panics if it reaches unexisting environment.
-    fn ancestor(&self, d: usize) -> Rc<RefCell<Env>> {
-        let ancestor = (0..d)
-            .scan(self.parent.upgrade().unwrap(), |env, _| {
-                Some(env.borrow().parent.upgrade().unwrap())
-            })
-            .last()
-            .unwrap();
-        ancestor.clone()
-    }
-
     pub fn get_resolved(&self, name: &str, d: usize) -> Result<LoxObj> {
-        // FIXME: may panic
-        match self.ancestor(d).borrow().map.borrow().get(name) {
-            Some(name) => Ok(name.clone()),
-            _ => Err(RuntimeError::Undefined(name.to_string())),
+        if d == 0 {
+            self.get(name)
+        } else {
+            match self.ancestor(d).borrow().map.borrow().get(name) {
+                Some(name) => Ok(name.clone()),
+                _ => Err(RuntimeError::Undefined(name.to_string())),
+            }
         }
     }
 
     pub fn assign_resolved(&mut self, name: &str, obj: LoxObj, d: usize) -> Result<()> {
-        self.ancestor(d).borrow_mut().assign(name, obj)
+        if d == 0 {
+            self.assign(name, obj)
+        } else {
+            self.ancestor(d).borrow_mut().assign(name, obj)
+        }
+    }
+
+    /// Looks up an enclosing environment in a distance, trusting the length > 0.
+    fn ancestor(&self, d: usize) -> Rc<RefCell<Env>> {
+        (0..d)
+            .scan(self.parent.upgrade().unwrap(), |env, _| {
+                Some(env.borrow().parent.upgrade().unwrap())
+            })
+            .last()
+            .unwrap()
+            .clone()
     }
 }

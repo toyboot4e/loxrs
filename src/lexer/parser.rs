@@ -493,7 +493,7 @@ where
 
         // previous `Expr` must be assignable (`Expr::Variable`)
         let name = match expr {
-            Expr::Variable(ref name) => name,
+            Expr::Variable(ref var) => &var.name,
             e => return Err(ParseError::NotAssignable(e)),
         };
         self.advance(); // =
@@ -603,7 +603,7 @@ where
         }
     }
 
-    /// primary → literal | group | indentifier ;
+    /// primary → literal | group |indentifier ;
     ///
     /// literal → number | string | "false" | "true" | "nil" ;
     /// group   → "(" expression ")" ;

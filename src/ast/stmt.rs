@@ -24,10 +24,9 @@ impl FnDef {
 /// Stmt → expr | if | print | block ;
 #[derive(Clone, Debug, PartialEq)]
 pub enum Stmt {
-    /// exprStmt  → expression ";" ;
+    /// Just evaluate the expression
     Expr(Expr),
     Fn(FnDef),
-    /// printStmt → "print" expression ";" ;
     Print(PrintArgs),
     Var(VarDecArgs),
     If(Box<IfArgs>),
