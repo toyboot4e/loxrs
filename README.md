@@ -2,7 +2,7 @@
 
 Yet another hobby project to follow the book [Crafting Interpreters](http://www.craftinginterpreters.com/) in Rust.
 
-I'm doing part II. Now on: Ch.11 [Resolving and Binding](https://craftinginterpreters.com/resolving-and-binding.html)
+I'm doing part II (treewalk interpreter). Now on: Ch.12 [Classes](https://craftinginterpreters.com/classes.html)
 
 ## Examples
 
@@ -20,6 +20,8 @@ count(3);
 ```
 
 Do `cargo run -- <filename>` to run program.
+
+All text below are **in progress**.
 
 ## Overview of the book
 
