@@ -1,14 +1,15 @@
-print "global -> global -> block";
+print "ok if the output is: global -> global -> block";
+print ""
 
 var a = "global";
 {
   fn showA() {
-    print a;
+    print a; // must be always binded to global
   }
 
-  showA();
+  showA(); // use of a (distance = -2)
   var a = "block";
-  showA();
-  print a;
+  showA(); // use of a (distance = -2)
+  print a; // use of a (distance = 0)
 }
 
