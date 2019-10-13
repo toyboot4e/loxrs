@@ -6,6 +6,8 @@ mod visitor;
 pub use interpreter::Interpreter;
 pub use visitor::{ExprVisitor, StmtVisitor};
 
+pub type Result<T> = ::std::result::Result<T, RuntimeError>;
+
 /// Error when evaluating expressions.
 #[derive(Debug)]
 pub enum RuntimeError {
@@ -19,4 +21,3 @@ pub enum RuntimeError {
     WrongNumberOfArguments,
 }
 
-pub type Result<T> = ::std::result::Result<T, RuntimeError>;

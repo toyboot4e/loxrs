@@ -1,0 +1,12 @@
+print "there's a print below";
+
+// one line comment
+
+/* multiline
+comment
+*/
+
+/* nestable /* comment */ is .. */ // here
+
+print "no error in the above, right?";
+

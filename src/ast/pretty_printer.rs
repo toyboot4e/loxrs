@@ -1,5 +1,6 @@
 //! Pretty prints expression
 
+// TODO: indent for nested blocks
 // TODO: use ::std::fmt::Display
 
 use crate::ast::expr::*;
@@ -18,7 +19,7 @@ impl PrettyPrint for Expr {
             Binary(ref b) => b.pretty_print(),
             Logic(ref b) => b.pretty_print(),
             Grouping(ref expr) => expr.pretty_print(),
-            Variable(ref name) => format!("(var {})", name),
+            Variable(ref var) => format!("{}", var.name),
             Assign(ref a) => a.pretty_print(),
             Call(ref call) => call.pretty_print(),
         }
@@ -62,8 +63,8 @@ impl PrettyPrintHelper for LogicOper {
     fn pretty_print_help(&self) -> &str {
         use LogicOper::*;
         match *self {
-            Or => "||",
-            And => "&&",
+            Or => "or",
+            And => "and",
         }
     }
 }
@@ -126,7 +127,11 @@ impl PrettyPrint for GroupingArgs {
 
 impl PrettyPrint for AssignArgs {
     fn pretty_print(&self) -> String {
-        format!("(assign \"{}\" {})", self.name, self.expr.pretty_print())
+        format!(
+            "(set \"{}\" {})",
+            self.assigned.name,
+            self.expr.pretty_print()
+        )
     }
 }
 
@@ -160,14 +165,20 @@ impl PrettyPrint for BlockArgs {
 }
 
 fn vec_to_s(xs: &Vec<impl ::std::fmt::Debug>) -> String {
-    format!("{:?}", xs)
+    format!(
+        "({})",
+        xs.iter()
+            .map(|x| format!("{:?}", x))
+            .collect::<Vec<_>>()
+            .join(", ".into())
+    )
 }
 
 impl PrettyPrint for Stmt {
     fn pretty_print(&self) -> String {
         use Stmt::*;
         match *self {
-            Expr(ref expr) => format!("(expr {})", expr.pretty_print()),
+            Expr(ref expr) => format!("(eval {})", expr.pretty_print()),
             Print(ref print) => format!("(print {})", print.expr.pretty_print()),
             Var(ref var) => format!("(var {} {})", var.name, var.init.pretty_print()),
             If(ref if_) => format!(
@@ -180,13 +191,12 @@ impl PrettyPrint for Stmt {
                 }
             ),
             Block(ref block) => format!(
-                "(block {})",
-                block
-                    .stmts
-                    .iter()
-                    .map(|s| s.pretty_print())
-                    .collect::<Vec<String>>()
-                    .join("\n  ")
+                "(progn {})",
+                block.stmts.iter().map(|s| s.pretty_print()).fold(
+                    // add newline and indent
+                    "".to_string(),
+                    |x, y| format!("{}\n{}", x, y)
+                )
             ),
             Return(ref ret) => format!("(return {})", ret.expr.pretty_print()),
             While(ref while_) => format!(
@@ -195,7 +205,7 @@ impl PrettyPrint for Stmt {
                 while_.block.pretty_print(),
             ),
             Fn(ref f) => format!(
-                "(defn {} {} {}",
+                "(defn {} {} ({}))",
                 f.name,
                 f.params
                     .as_ref()
@@ -258,4 +268,3 @@ mod test {
         );
     }
 }
-

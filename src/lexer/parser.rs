@@ -51,6 +51,7 @@ where
     I: Iterator<Item = &'a SourceToken> + Sized,
 {
     tokens: Peekable<I>,
+    counter: VarUseIdCounter,
 }
 
 impl<'a> Parser<'a, std::slice::Iter<'a, SourceToken>> {
@@ -58,6 +59,7 @@ impl<'a> Parser<'a, std::slice::Iter<'a, SourceToken>> {
     pub fn new(tokens: &'a [SourceToken]) -> Self {
         Parser {
             tokens: tokens.iter().peekable(),
+            counter: VarUseIdCounter::new(),
         }
     }
 }
@@ -493,12 +495,12 @@ where
 
         // previous `Expr` must be assignable (`Expr::Variable`)
         let name = match expr {
-            Expr::Variable(ref name) => name,
+            Expr::Variable(ref var) => &var.name,
             e => return Err(ParseError::NotAssignable(e)),
         };
         self.advance(); // =
         let right = self.assignment()?;
-        Ok(Expr::assign(name, right))
+        Ok(Expr::assign(name, right, self.counter.next()))
     }
 
     /// logic_or → logicAnd ("||" logicAnd)*
@@ -603,29 +605,35 @@ where
         }
     }
 
-    /// primary → literal | group | indentifier ;
+    /// primary → literal | group |indentifier ;
     ///
     /// literal → number | string | "false" | "true" | "nil" ;
     /// group   → "(" expression ")" ;
     ///
     /// Make sure that there exists next token (predictive parsing).
     fn expr_prim(&mut self) -> Result<Expr> {
-        let s_token = self.try_next()?;
-        if let Some(literal) = LiteralArgs::from_token(&s_token.token) {
-            return Ok(literal.into());
-        }
-        use Token::*;
-        match s_token.token {
-            LeftParen => self.expr_group(),
-            Identifier(ref name) => Ok(Expr::var(name)),
-            _ => {
-                Err(ParseError::unexpected(
-                    s_token,
-                    // TODO: abstract token for literals
-                    &[Number(0.0), String("".into()), False, True, Nil, LeftParen],
-                ))
+        // TODO: refactor
+        let mut var = {
+            let s_token = self.try_next()?;
+            if let Some(literal) = LiteralArgs::from_token(&s_token.token) {
+                return Ok(literal.into());
             }
-        }
+            use Token::*;
+            let name = match s_token.token {
+                LeftParen => return self.expr_group(),
+                Identifier(ref name) => name,
+                _ => {
+                    return Err(ParseError::unexpected(
+                        s_token,
+                        // TODO: abstract token for literals
+                        &[Number(0.0), String("".into()), False, True, Nil, LeftParen],
+                    ));
+                }
+            };
+            VariableArgs::new(name, VarUseId::new())
+        };
+        var.id = self.counter.next();
+        Ok(Expr::Variable(var))
     }
 
     /// group → "(" expression ")" ;

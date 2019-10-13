@@ -15,7 +15,7 @@ pub trait ExprVisitor<T> {
             Binary(args) => self.visit_binary_expr(args.as_ref()),
             Logic(args) => self.visit_logic_expr(args.as_ref()),
             Grouping(args) => self.visit_expr(&args.expr),
-            Variable(name) => self.visit_var_expr(name),
+            Variable(var) => self.visit_var_expr(var),
             Assign(args) => self.visit_assign_expr(args.as_ref()),
             Call(call) => self.visit_call_expr(call.as_ref()),
         }
@@ -24,7 +24,7 @@ pub trait ExprVisitor<T> {
     fn visit_unary_expr(&mut self, unary: &UnaryArgs) -> T;
     fn visit_binary_expr(&mut self, binary: &BinaryArgs) -> T;
     fn visit_logic_expr(&mut self, logic: &LogicArgs) -> T;
-    fn visit_var_expr(&mut self, name: &str) -> T;
+    fn visit_var_expr(&mut self, var: &VariableArgs) -> T;
     fn visit_assign_expr(&mut self, assign: &AssignArgs) -> T;
     fn visit_call_expr(&mut self, call: &CallArgs) -> T;
 }
@@ -52,7 +52,7 @@ pub trait StmtVisitor<T> {
     // TODO: make `print` a native function
     fn visit_print_stmt(&mut self, print: &PrintArgs) -> T;
     fn visit_if_stmt(&mut self, if_: &IfArgs) -> T;
-    /// We need local scope for function blocks
+    /// Block just for limiting lifetimes of objects
     fn visit_block_stmt(&mut self, stmts: &Vec<Stmt>, env: Option<Env>) -> T;
     fn visit_return_stmt(&mut self, ret: &Return) -> T;
     fn visit_while_stmt(&mut self, while_: &WhileArgs) -> T;

@@ -1,6 +1,8 @@
 use crate::lexer::token::Token;
 use std::convert::From;
 
+// We need to make `Expr` hashable so that we can map `Expr` to distance
+// in `Resolver`.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expr {
     Literal(LiteralArgs),
@@ -8,7 +10,8 @@ pub enum Expr {
     Binary(Box<BinaryArgs>),
     Logic(Box<LogicArgs>),
     Grouping(Box<GroupingArgs>),
-    Variable(String),
+    // TODO: rename me; it may be function
+    Variable(VariableArgs),
     Assign(Box<AssignArgs>),
     Call(Box<CallArgs>),
 }
@@ -47,13 +50,13 @@ impl Expr {
         Expr::Grouping(Box::new(GroupingArgs { expr: expr }))
     }
 
-    pub fn var(name: &str) -> Expr {
-        Expr::Variable(name.to_string())
+    pub fn var(name: &str, id: VarUseId) -> Expr {
+        Expr::Variable(VariableArgs::new(name, id))
     }
 
-    pub fn assign(name: impl Into<String>, expr: Expr) -> Expr {
+    pub fn assign(name: &str, expr: Expr, id: VarUseId) -> Expr {
         Expr::Assign(Box::new(AssignArgs {
-            name: name.into(),
+            assigned: VariableArgs::new(name, id),
             expr: expr,
         }))
     }
@@ -81,6 +84,7 @@ pub enum LiteralArgs {
 }
 
 impl LiteralArgs {
+    /// Maps specific tokens to `Option::Some(LiteralArgs)`
     pub fn from_token(token: &Token) -> Option<LiteralArgs> {
         use Token::*;
         Some(match token {
@@ -217,11 +221,59 @@ pub struct GroupingArgs {
     pub expr: Expr,
 }
 
+/// Enables to track each variable use. It's required by the `Resolver`.
+///
+/// We might be able to use source position instead, but my AST doesn't track that information.
+/// So I embeded ID in AST.
+// TODO: refactor when I add more context to error information
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct VarUseId {
+    id: usize,
+}
+
+impl VarUseId {
+    pub fn new() -> Self {
+        Self { id: 0 }
+    }
+}
+
+/// Creates new ID.
+pub struct VarUseIdCounter {
+    id: usize,
+}
+
+impl VarUseIdCounter {
+    pub fn new() -> Self {
+        Self { id: 0 }
+    }
+
+    pub fn next(&mut self) -> VarUseId {
+        self.id += 1;
+        VarUseId { id: self.id - 1 }
+    }
+}
+
+/// Represents a variable use
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct VariableArgs {
+    pub name: String,
+    /// Unique identity of each variable use
+    pub id: VarUseId,
+}
+
+impl VariableArgs {
+    pub fn new(name: &str, id: VarUseId) -> Self {
+        Self {
+            name: name.to_string(),
+            id: id,
+        }
+    }
+}
+
 /// `=`,  only parsed as an expression statement.
 #[derive(Clone, Debug, PartialEq)]
 pub struct AssignArgs {
-    /// Name of the identifier to assign
-    pub name: String,
+    pub assigned: VariableArgs,
     pub expr: Expr,
 }
 
@@ -240,10 +292,10 @@ impl From<Token> for Option<AssignOper> {
     }
 }
 
+pub type Args = Vec<Expr>;
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct CallArgs {
     pub callee: Expr,
     pub args: Option<Args>,
 }
-
-pub type Args = Vec<Expr>;
