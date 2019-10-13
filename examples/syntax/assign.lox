@@ -6,11 +6,12 @@ print x;
 x = 20;
 print x;
 
-// recursive
+// recursive assignment
 var y = 12;
 var z = 14;
 x = y = z = 50;
 
+// results
 print x;
 print y;
 print z;

@@ -24,10 +24,9 @@ impl FnDef {
 /// Stmt → expr | if | print | block ;
 #[derive(Clone, Debug, PartialEq)]
 pub enum Stmt {
-    /// exprStmt  → expression ";" ;
+    /// Just evaluate the expression
     Expr(Expr),
     Fn(FnDef),
-    /// printStmt → "print" expression ";" ;
     Print(PrintArgs),
     Var(VarDecArgs),
     If(Box<IfArgs>),
@@ -61,6 +60,7 @@ impl Stmt {
         Stmt::Block(BlockArgs { stmts: stmts })
     }
 
+    /// Even if a function returns nothing, it returns `Some(LoxObj::Nul)` internally
     pub fn return_(expr: Expr) -> Self {
         Stmt::Return(Return { expr: expr })
     }
@@ -101,8 +101,10 @@ pub struct VarDecArgs {
 #[derive(Clone, Debug, PartialEq)]
 pub struct IfArgs {
     pub condition: Expr,
+    // branches
+    /// True branch
     pub if_true: Stmt,
-    /// May be `if`
+    /// Else branch. If it's `if`, the branch means `if else`.
     pub if_false: Option<Stmt>,
 }
 
@@ -127,6 +129,7 @@ impl BlockArgs {
     }
 }
 
+/// Even if a function returns nothing, it returns `Some(LoxObj::Nul)` internally
 #[derive(Clone, Debug, PartialEq)]
 pub struct Return {
     pub expr: Expr,

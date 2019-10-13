@@ -154,6 +154,7 @@ type Result<T> = std::result::Result<T, ScanError>;
 #[derive(Debug, Clone)]
 pub enum ScanError {
     UnterminatedString(SourcePosition),
+    UnterminatedComment(SourcePosition),
     UnexpectedEof(SourcePosition),
     UnexpectedCharacter(char, SourcePosition),
 }
@@ -271,14 +272,33 @@ impl<'a> Scanner<'a> {
     fn scan_slash(&mut self) -> Option<Result<Token>> {
         if self.state.consume_char('/') {
             self.state.advance_until(|c| c == '\n');
-            return if self.state.peek().is_some() {
-                None
+            None // should care about EoF?
+        } else if self.state.consume_char('*') {
+            if let Err(why) = self.scan_multiline_comment() {
+                Some(Err(why))
             } else {
-                Some(Ok(Token::Eof))
-            };
+                None
+            }
         } else {
             Some(Ok(Token::Slash))
         }
+    }
+
+    fn scan_multiline_comment(&mut self) -> Result<()> {
+        while let Some(c) = self.state.next() {
+            if c == '*' {
+                if self.state.consume_char('/') {
+                    return Ok(());
+                }
+            }
+            // nestable
+            if c == '/' {
+                if self.state.consume_char('*') {
+                    self.scan_multiline_comment()?;
+                }
+            }
+        }
+        Err(ScanError::UnterminatedComment(self.state.pos()))
     }
 
     // TODO: enable rich enclosure such as ###"

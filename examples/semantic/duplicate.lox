@@ -1,0 +1,7 @@
+// duplicate error must be detected"
+
+fn test_duplicates() {
+    var a = 3;
+    var a = "A";
+}
+

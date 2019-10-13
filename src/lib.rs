@@ -4,12 +4,13 @@
 #![allow(unused_variables)]
 #![warn(rust_2018_idioms)]
 
+mod analizer;
 mod ast;
 mod lexer;
 mod runtime;
 
-use crate::ast::stmt::Stmt;
-use crate::ast::PrettyPrint;
+use crate::analizer::resolver::Resolver;
+use crate::ast::{stmt::Stmt, PrettyPrint};
 use crate::lexer::{parser::Parser, scanner::Scanner};
 use crate::runtime::Interpreter;
 
@@ -26,7 +27,20 @@ pub fn run_file(path: &str) {
     };
     let (tokens, scan_errors) = Scanner::new(&source).scan();
     let (mut stmts, parse_errors) = Parser::new(&tokens).parse();
-    self::interpret(&mut stmts);
+    if parse_errors.len() > 0 {
+        println!("parse error");
+        return;
+    }
+    let mut interpreter = Interpreter::new();
+    {
+        let mut resolver = Resolver::new(&mut interpreter.caches);
+        if let Err(why) = resolver.resolve_stmts(&mut stmts) {
+            println!("====== resolving error ======");
+            println!("{:?}", why);
+            return;
+        }
+    }
+    self::interpret(&mut stmts, &mut interpreter);
 }
 
 /// Runs a file with debug output (including lexer output)
@@ -47,7 +61,16 @@ pub fn run_file_debug(path: &str) {
     self::print_all_debug("===== parse errors =====", &parse_errors);
     self::print_all_display("===== AST =====", stmts.iter().map(|s| s.pretty_print()));
 
-    self::interpret(&mut stmts);
+    let mut interpreter = Interpreter::new();
+    {
+        let mut resolver = Resolver::new(&mut interpreter.caches);
+        if let Err(why) = resolver.resolve_stmts(&mut stmts) {
+            println!("====== resolving error ======");
+            println!("{:?}", why);
+            return;
+        }
+    }
+    self::interpret(&mut stmts, &mut interpreter);
 }
 
 fn print_all_debug(description: &str, items: impl IntoIterator<Item = impl ::std::fmt::Debug>) {
@@ -97,8 +120,7 @@ pub fn run_repl() {
     }
 }
 
-pub fn interpret(stmts: &mut [Stmt]) {
-    let mut interpreter = Interpreter::new();
+pub fn interpret(stmts: &mut [Stmt], interpreter: &mut Interpreter) {
     println!("====== interpretations =====");
     match stmts
         .iter()

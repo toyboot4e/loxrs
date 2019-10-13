@@ -1,12 +1,12 @@
-use std::cell::RefCell;
-use std::rc::Rc;
-use std::time::SystemTime;
+use ::std::cell::RefCell;
+use ::std::collections::HashMap;
+use ::std::rc::Rc;
+use ::std::time::SystemTime;
 
 use super::env::Env;
 use super::visitor::StmtVisitor;
 
-use crate::ast::PrettyPrint;
-use crate::ast::{expr::*, stmt::*};
+use crate::ast::{expr::*, stmt::*, PrettyPrint};
 use crate::runtime::{
     obj::{LoxFn, LoxObj, LoxValue},
     Result, RuntimeError,
@@ -14,22 +14,38 @@ use crate::runtime::{
 
 // TODO: encapsulate `Rc<Refcell<T>>`
 pub struct Interpreter {
-    /// Points to the global `Env`
+    /// Points at a global `Env`
     globals: Rc<RefCell<Env>>,
     /// Temporary `Env` for proessing
     pub env: Rc<RefCell<Env>>,
-    /// When the interpretation started; enables `clock` native function
+    /// The time interpretation started. Required for `clock` native function.
     begin_time: SystemTime,
+    /// Maps each identifier in local scope to the distance to the scope it's in.
+    pub caches: HashMap<VariableArgs, usize>,
+}
+
+/// Capabilities provided by `Resolver`
+impl Interpreter {
+    fn lookup_resolved(&self, var: &VariableArgs) -> Result<LoxObj> {
+        if let Some(d) = self.caches.get(var) {
+            // it's a local variable resoled
+            self.env.borrow().get_resolved(&var.name, d.clone())
+        } else {
+            // we assume it's a global variables, which are not tracked by the `Resolver`
+            self.globals.borrow().get(&var.name)
+        }
+    }
 }
 
 impl Interpreter {
     pub fn new() -> Self {
         let globals = Rc::new(RefCell::new(Self::global_env()));
-        let env = Rc::new(RefCell::new(Env::from_parent(&globals)));
+        let env = Rc::clone(&globals);
         Self {
             globals: globals,
             env: env,
             begin_time: SystemTime::now(),
+            caches: HashMap::new(),
         }
     }
 
@@ -122,6 +138,7 @@ impl StmtVisitor<Result<Option<LoxObj>>> for Interpreter {
 
     fn visit_print_stmt(&mut self, print: &PrintArgs) -> Result<Option<LoxObj>> {
         let obj = self.eval_expr(&print.expr)?;
+        // TODO: string should not be quoted
         println!("{}", obj.pretty_print());
         Ok(None)
     }
@@ -154,13 +171,17 @@ impl StmtVisitor<Result<Option<LoxObj>>> for Interpreter {
         self.env = Rc::new(RefCell::new(new_env));
 
         for stmt in stmts.iter() {
-            // early return considered
-            match self.interpret(stmt)? {
-                Some(obj) => {
+            match self.interpret(stmt) {
+                Err(why) => {
+                    self.env = prev;
+                    return Err(why);
+                }
+                // early returns considered
+                Ok(Some(obj)) => {
                     self.env = prev;
                     return Ok(Some(obj));
                 }
-                None => {}
+                _ => {}
             }
         }
         self.env = prev;
@@ -347,21 +368,23 @@ impl ExprVisitor<Result<LoxObj>> for Interpreter {
         })
     }
 
-    fn visit_var_expr(&mut self, name: &str) -> Result<LoxObj> {
-        self.env.borrow().get(name)
+    fn visit_var_expr(&mut self, var: &VariableArgs) -> Result<LoxObj> {
+        self.lookup_resolved(&var)
     }
 
     fn visit_assign_expr(&mut self, assign: &AssignArgs) -> Result<LoxObj> {
         let obj = self.eval_expr(&assign.expr)?;
         self.env
             .borrow_mut()
-            .assign(assign.name.as_str(), obj.clone())?;
+            .assign(assign.assigned.name.as_str(), obj.clone())?;
         Ok(obj)
     }
 
     fn visit_call_expr(&mut self, call: &CallArgs) -> Result<LoxObj> {
         if let LoxObj::Callable(ref fn_obj) = self.eval_expr(&call.callee)? {
-            let obj = self.invoke(fn_obj, &call.args)?.unwrap_or_else(|| LoxObj::nil());
+            let obj = self
+                .invoke(fn_obj, &call.args)?
+                .unwrap_or_else(|| LoxObj::nil());
             Ok(obj)
         } else {
             Err(RuntimeError::MismatchedType)
