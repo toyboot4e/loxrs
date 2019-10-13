@@ -615,7 +615,7 @@ where
         // TODO: refactor
         let mut var = {
             let s_token = self.try_next()?;
-            if let Some(literal) = LiteralArgs::from_token(&s_token.token) {
+            if let Some(literal) = LiteralData::from_token(&s_token.token) {
                 return Ok(literal.into());
             }
             use Token::*;
@@ -630,7 +630,7 @@ where
                     ));
                 }
             };
-            VariableArgs::new(name, VarUseId::new())
+            VarUseData::new(name, VarUseId::new())
         };
         var.id = self.counter.next();
         Ok(Expr::Variable(var))

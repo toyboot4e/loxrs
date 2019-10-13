@@ -69,9 +69,9 @@ impl PrettyPrintHelper for LogicOper {
     }
 }
 
-impl PrettyPrint for LiteralArgs {
+impl PrettyPrint for LiteralData {
     fn pretty_print(&self) -> String {
-        use LiteralArgs::*;
+        use LiteralData::*;
         match *self {
             Nil => "Nil".into(),
             Bool(b) => {
@@ -87,7 +87,7 @@ impl PrettyPrint for LiteralArgs {
     }
 }
 
-impl PrettyPrint for UnaryArgs {
+impl PrettyPrint for UnaryData {
     fn pretty_print(&self) -> String {
         format!(
             "({} {})",
@@ -97,7 +97,7 @@ impl PrettyPrint for UnaryArgs {
     }
 }
 
-impl PrettyPrint for BinaryArgs {
+impl PrettyPrint for BinaryData {
     fn pretty_print(&self) -> String {
         format!(
             "({} {} {})",
@@ -108,7 +108,7 @@ impl PrettyPrint for BinaryArgs {
     }
 }
 
-impl PrettyPrint for LogicArgs {
+impl PrettyPrint for LogicData {
     fn pretty_print(&self) -> String {
         format!(
             "({} {} {})",
@@ -119,13 +119,13 @@ impl PrettyPrint for LogicArgs {
     }
 }
 
-impl PrettyPrint for GroupingArgs {
+impl PrettyPrint for GroupData {
     fn pretty_print(&self) -> String {
         format!("group {}", self.expr.pretty_print())
     }
 }
 
-impl PrettyPrint for AssignArgs {
+impl PrettyPrint for AssignData {
     fn pretty_print(&self) -> String {
         format!(
             "(set \"{}\" {})",
@@ -135,7 +135,7 @@ impl PrettyPrint for AssignArgs {
     }
 }
 
-impl PrettyPrint for CallArgs {
+impl PrettyPrint for CallData {
     fn pretty_print(&self) -> String {
         format!(
             "(call {} {})",

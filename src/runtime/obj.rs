@@ -24,7 +24,7 @@ impl LoxObj {
 }
 
 /// Runtime value
-// TODO: use traits and share instances between `LoxObj` & `LiteralArgs`
+// TODO: use traits and share instances between `LoxObj` & `LiteralData`
 #[derive(Clone, Debug, PartialEq)]
 pub enum LoxValue {
     Nil,
@@ -34,12 +34,12 @@ pub enum LoxValue {
 }
 
 impl LoxValue {
-    pub fn from_lit(lit: &LiteralArgs) -> Self {
+    pub fn from_lit(lit: &LiteralData) -> Self {
         match lit {
-            LiteralArgs::Nil => LoxValue::Nil,
-            LiteralArgs::Bool(b) => LoxValue::Bool(b.clone()),
-            LiteralArgs::StringLit(s) => LoxValue::StringLit(s.clone()),
-            LiteralArgs::Number(n) => LoxValue::Number(n.clone()),
+            LiteralData::Nil => LoxValue::Nil,
+            LiteralData::Bool(b) => LoxValue::Bool(b.clone()),
+            LiteralData::StringLit(s) => LoxValue::StringLit(s.clone()),
+            LiteralData::Number(n) => LoxValue::Number(n.clone()),
         }
     }
 }
@@ -55,7 +55,7 @@ impl LoxObj {
         LoxObj::Value(LoxValue::Bool(b))
     }
 
-    pub fn from_lit(lit: &LiteralArgs) -> Self {
+    pub fn from_lit(lit: &LiteralData) -> Self {
         LoxObj::Value(LoxValue::from_lit(lit))
     }
 

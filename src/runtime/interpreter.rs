@@ -21,12 +21,12 @@ pub struct Interpreter {
     /// The time interpretation started. Required for `clock` native function.
     begin_time: SystemTime,
     /// Maps each identifier in local scope to the distance to the scope it's in.
-    pub caches: HashMap<VariableArgs, usize>,
+    pub caches: HashMap<VarUseData, usize>,
 }
 
 /// Capabilities provided by `Resolver`
 impl Interpreter {
-    fn lookup_resolved(&self, var: &VariableArgs) -> Result<LoxObj> {
+    fn lookup_resolved(&self, var: &VarUseData) -> Result<LoxObj> {
         if let Some(d) = self.caches.get(var) {
             // it's a local variable resoled
             self.env.borrow().get_resolved(&var.name, d.clone())
@@ -288,11 +288,11 @@ use std::cmp::Ordering;
 
 /// Visitors for implementing `eval_expr`
 impl ExprVisitor<Result<LoxObj>> for Interpreter {
-    fn visit_literal_expr(&mut self, lit: &LiteralArgs) -> Result<LoxObj> {
+    fn visit_literal_expr(&mut self, lit: &LiteralData) -> Result<LoxObj> {
         Ok(ValObj(LoxValue::from_lit(lit)))
     }
 
-    fn visit_unary_expr(&mut self, unary: &UnaryArgs) -> Result<LoxObj> {
+    fn visit_unary_expr(&mut self, unary: &UnaryData) -> Result<LoxObj> {
         let obj = self.visit_expr(&unary.expr)?;
         use UnaryOper::*;
         match &unary.oper {
@@ -305,7 +305,7 @@ impl ExprVisitor<Result<LoxObj>> for Interpreter {
     }
 
     /// `==`, `!=`, `<`, `<=`, `>`, `>=`, `+`, `-`, `*`, `/`
-    fn visit_binary_expr(&mut self, binary: &BinaryArgs) -> Result<LoxObj> {
+    fn visit_binary_expr(&mut self, binary: &BinaryData) -> Result<LoxObj> {
         use BinaryOper::*;
         let oper = binary.oper.clone();
 
@@ -351,7 +351,7 @@ impl ExprVisitor<Result<LoxObj>> for Interpreter {
     }
 
     /// `&&`, `||`
-    fn visit_logic_expr(&mut self, logic: &LogicArgs) -> Result<LoxObj> {
+    fn visit_logic_expr(&mut self, logic: &LogicData) -> Result<LoxObj> {
         let oper = logic.oper.clone();
         let left_truthy = self.visit_expr(&logic.left)?.is_truthy();
         Ok(match oper {
@@ -368,11 +368,11 @@ impl ExprVisitor<Result<LoxObj>> for Interpreter {
         })
     }
 
-    fn visit_var_expr(&mut self, var: &VariableArgs) -> Result<LoxObj> {
+    fn visit_var_expr(&mut self, var: &VarUseData) -> Result<LoxObj> {
         self.lookup_resolved(&var)
     }
 
-    fn visit_assign_expr(&mut self, assign: &AssignArgs) -> Result<LoxObj> {
+    fn visit_assign_expr(&mut self, assign: &AssignData) -> Result<LoxObj> {
         let obj = self.eval_expr(&assign.expr)?;
         self.env
             .borrow_mut()
@@ -380,7 +380,7 @@ impl ExprVisitor<Result<LoxObj>> for Interpreter {
         Ok(obj)
     }
 
-    fn visit_call_expr(&mut self, call: &CallArgs) -> Result<LoxObj> {
+    fn visit_call_expr(&mut self, call: &CallData) -> Result<LoxObj> {
         if let LoxObj::Callable(ref fn_obj) = self.eval_expr(&call.callee)? {
             let obj = self
                 .invoke(fn_obj, &call.args)?

@@ -20,13 +20,13 @@ pub trait ExprVisitor<T> {
             Call(call) => self.visit_call_expr(call.as_ref()),
         }
     }
-    fn visit_literal_expr(&mut self, literal: &LiteralArgs) -> T;
-    fn visit_unary_expr(&mut self, unary: &UnaryArgs) -> T;
-    fn visit_binary_expr(&mut self, binary: &BinaryArgs) -> T;
-    fn visit_logic_expr(&mut self, logic: &LogicArgs) -> T;
-    fn visit_var_expr(&mut self, var: &VariableArgs) -> T;
-    fn visit_assign_expr(&mut self, assign: &AssignArgs) -> T;
-    fn visit_call_expr(&mut self, call: &CallArgs) -> T;
+    fn visit_literal_expr(&mut self, literal: &LiteralData) -> T;
+    fn visit_unary_expr(&mut self, unary: &UnaryData) -> T;
+    fn visit_binary_expr(&mut self, binary: &BinaryData) -> T;
+    fn visit_logic_expr(&mut self, logic: &LogicData) -> T;
+    fn visit_var_expr(&mut self, var: &VarUseData) -> T;
+    fn visit_assign_expr(&mut self, assign: &AssignData) -> T;
+    fn visit_call_expr(&mut self, call: &CallData) -> T;
 }
 
 /// Automates double dispatches
