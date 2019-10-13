@@ -50,13 +50,13 @@ impl Expr {
         Expr::Grouping(Box::new(GroupingArgs { expr: expr }))
     }
 
-    pub fn var(name: &str) -> Expr {
-        Expr::Variable(VariableArgs::new(name))
+    pub fn var(name: &str, id: VarUseId) -> Expr {
+        Expr::Variable(VariableArgs::new(name, id))
     }
 
-    pub fn assign(name: &str, expr: Expr) -> Expr {
+    pub fn assign(name: &str, expr: Expr, id: VarUseId) -> Expr {
         Expr::Assign(Box::new(AssignArgs {
-            assigned: VariableArgs::new(name),
+            assigned: VariableArgs::new(name, id),
             expr: expr,
         }))
     }
@@ -84,6 +84,7 @@ pub enum LiteralArgs {
 }
 
 impl LiteralArgs {
+    /// Maps specific tokens to `Option::Some(LiteralArgs)`
     pub fn from_token(token: &Token) -> Option<LiteralArgs> {
         use Token::*;
         Some(match token {
@@ -220,19 +221,51 @@ pub struct GroupingArgs {
     pub expr: Expr,
 }
 
-pub struct VariableIdentifierForAst(usize);
-impl VariableIdentifierForAst {}
+/// Enables to track each variable use. It's required by the `Resolver`.
+///
+/// We might be able to use source position instead, but my AST doesn't track that information.
+/// So I embeded ID in AST.
+// TODO: refactor when I add more context to error information
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct VarUseId {
+    id: usize,
+}
 
-/// An expression identifier in AST.
+impl VarUseId {
+    pub fn new() -> Self {
+        Self { id: 0 }
+    }
+}
+
+/// Creates new ID.
+pub struct VarUseIdCounter {
+    id: usize,
+}
+
+impl VarUseIdCounter {
+    pub fn new() -> Self {
+        Self { id: 0 }
+    }
+
+    pub fn next(&mut self) -> VarUseId {
+        self.id += 1;
+        VarUseId { id: self.id - 1 }
+    }
+}
+
+/// Represents a variable use
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct VariableArgs {
     pub name: String,
+    /// Unique identity of each variable use
+    pub id: VarUseId,
 }
 
 impl VariableArgs {
-    pub fn new(name: &str) -> Self {
+    pub fn new(name: &str, id: VarUseId) -> Self {
         Self {
             name: name.to_string(),
+            id: id,
         }
     }
 }
