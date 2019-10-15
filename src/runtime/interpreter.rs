@@ -204,9 +204,19 @@ impl StmtVisitor<Result<Option<LoxObj>>> for Interpreter {
         Ok(None)
     }
 
-    fn visit_fn_decl(&mut self, def: &FnDef) -> Result<Option<LoxObj>> {
+    fn visit_fn_decl(&mut self, def: &FnDeclArgs) -> Result<Option<LoxObj>> {
         let f = LoxObj::f(def, &self.env);
         self.env.borrow_mut().define(def.name.as_str(), f)?;
+        Ok(None)
+    }
+
+    // TODO: do not clone
+    fn visit_class_decl(&mut self, c: &ClassDeclArgs) -> Result<Option<LoxObj>> {
+        self.env.borrow_mut().define(&c.name, LoxObj::nil())?;
+        // self.env
+        //     .borrow_mut()
+        //     .assign(&c.name, LoxObj::Class(LoxClass::new(
+        //                 )));
         Ok(None)
     }
 }

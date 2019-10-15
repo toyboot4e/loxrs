@@ -3,36 +3,19 @@ use crate::ast::expr::Expr;
 // TODO: use proper places for function definitions
 pub type Params = Vec<String>;
 
-/// Function definition translated to AST
-#[derive(Clone, Debug, PartialEq)]
-pub struct FnDef {
-    pub name: String,
-    pub body: BlockArgs,        // Vec
-    pub params: Option<Params>, // Vec
-}
-
-impl FnDef {
-    pub fn new(name: String, body: BlockArgs, params: Option<Params>) -> Self {
-        Self {
-            name: name,
-            body: body,
-            params: params,
-        }
-    }
-}
-
 /// Stmt → expr | if | print | block ;
 #[derive(Clone, Debug, PartialEq)]
 pub enum Stmt {
     /// Just evaluate the expression
     Expr(Expr),
-    Fn(FnDef),
+    Fn(FnDeclArgs),
     Print(PrintArgs),
     Var(VarDeclArgs),
     If(Box<IfArgs>),
     Return(Return),
     While(WhileArgs),
     Block(BlockArgs),
+    Class(ClassDeclArgs),
 }
 
 impl Stmt {
@@ -141,3 +124,36 @@ pub struct WhileArgs {
     pub block: BlockArgs,
 }
 
+/// Function definition translated to AST
+#[derive(Clone, Debug, PartialEq)]
+pub struct FnDeclArgs {
+    pub name: String,
+    pub body: BlockArgs,        // Vec
+    pub params: Option<Params>, // Vec
+}
+
+impl FnDeclArgs {
+    pub fn new(name: String, body: BlockArgs, params: Option<Params>) -> Self {
+        Self {
+            name: name,
+            body: body,
+            params: params,
+        }
+    }
+}
+
+/// In Lox, fields are dynamically added
+#[derive(Clone, Debug, PartialEq)]
+pub struct ClassDeclArgs {
+    pub name: String,
+    pub methods: Vec<FnDeclArgs>,
+}
+
+impl ClassDeclArgs {
+    pub fn new(name: String, methods: Vec<FnDeclArgs>) -> Self {
+        Self {
+            name: name,
+            methods: methods,
+        }
+    }
+}

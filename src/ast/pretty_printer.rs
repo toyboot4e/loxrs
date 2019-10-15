@@ -3,8 +3,17 @@
 // TODO: indent for nested blocks
 // TODO: use ::std::fmt::Display
 
-use crate::ast::expr::*;
-use crate::runtime::obj::{LoxFn, LoxObj, LoxValue};
+fn vec_to_s(xs: impl IntoIterator<Item = impl ::std::fmt::Debug>) -> String {
+    format!(
+        "({})",
+        xs.into_iter()
+            .map(|x| format!("{:?}", x))
+            .collect::<Vec<_>>()
+            .join(", ".into())
+    )
+}
+
+use crate::ast::{expr::*, stmt::*};
 
 pub trait PrettyPrint {
     fn pretty_print(&self) -> String;
@@ -152,7 +161,7 @@ impl PrettyPrint for CallData {
     }
 }
 
-use crate::ast::stmt::*;
+// statements
 
 impl PrettyPrint for BlockArgs {
     fn pretty_print(&self) -> String {
@@ -164,13 +173,30 @@ impl PrettyPrint for BlockArgs {
     }
 }
 
-fn vec_to_s(xs: &Vec<impl ::std::fmt::Debug>) -> String {
+pub fn pretty_fn(name: &str, params: &Option<Params>, stmts: &[Stmt]) -> String {
     format!(
-        "({})",
-        xs.iter()
-            .map(|x| format!("{:?}", x))
-            .collect::<Vec<_>>()
-            .join(", ".into())
+        "(defn {} {} ({}))",
+        name,
+        params
+            .as_ref()
+            .map(|params| self::vec_to_s(params))
+            .unwrap_or("()".into()),
+        self::pretty_block(stmts)
+    )
+}
+
+pub fn pretty_fn_decl(f: &FnDeclArgs) -> String {
+    self::pretty_fn(&f.name, &f.params, &f.body.stmts)
+}
+
+pub fn pretty_block(stmts: &[Stmt]) -> String {
+    format!(
+        "(progn {})",
+        stmts.iter().map(|s| s.pretty_print()).fold(
+            // add newline and indent
+            "".to_string(),
+            |x, y| format!("{}\n{}", x, y)
+        )
     )
 }
 
@@ -204,48 +230,13 @@ impl PrettyPrint for Stmt {
                 while_.condition.pretty_print(),
                 while_.block.pretty_print(),
             ),
-            Fn(ref f) => format!(
-                "(defn {} {} ({}))",
-                f.name,
-                f.params
-                    .as_ref()
-                    .map(|params| self::vec_to_s(params))
-                    .unwrap_or("()".into()),
-                f.body.pretty_print(),
+            Fn(ref f) => self::pretty_fn_decl(f),
+            Class(ref c) => format!(
+                "(class {} ({}))",
+                c.name,
+                vec_to_s(c.methods.iter().map(|m| self::pretty_fn_decl(m))),
             ),
         }
-    }
-}
-
-impl PrettyPrint for LoxValue {
-    fn pretty_print(&self) -> String {
-        match *self {
-            LoxValue::Nil => "Nil".into(),
-            LoxValue::Bool(b) => {
-                if b {
-                    "true".into()
-                } else {
-                    "false".into()
-                }
-            }
-            LoxValue::StringLit(ref s) => format!("\"{}\"", s.clone()),
-            LoxValue::Number(n) => n.to_string(),
-        }
-    }
-}
-
-impl PrettyPrint for LoxObj {
-    fn pretty_print(&self) -> String {
-        match self {
-            LoxObj::Value(value) => value.pretty_print(),
-            LoxObj::Callable(call) => call.pretty_print(),
-        }
-    }
-}
-
-impl PrettyPrint for LoxFn {
-    fn pretty_print(&self) -> String {
-        "(fn)".into()
     }
 }
 

@@ -1,7 +1,10 @@
-//! Object (value, variable or function) definitions
+//! Runtime representations of objects, separated from AST
 
-use crate::ast::expr::*;
-use crate::ast::stmt::{FnDef, Params, Stmt};
+use crate::ast::{
+    expr::*,
+    pretty_printer::{self, PrettyPrint},
+    stmt::{ClassDeclArgs, FnDeclArgs, Params, Stmt},
+};
 use crate::runtime::env::Env;
 use ::std::cell::RefCell;
 use ::std::rc::Rc;
@@ -11,6 +14,7 @@ use ::std::rc::Rc;
 pub enum LoxObj {
     Value(LoxValue),
     Callable(LoxFn),
+    Class(LoxClass),
 }
 
 impl LoxObj {
@@ -18,7 +22,7 @@ impl LoxObj {
         LoxObj::Value(LoxValue::Nil)
     }
 
-    pub fn f(def: &FnDef, closure: &Rc<RefCell<Env>>) -> Self {
+    pub fn f(def: &FnDeclArgs, closure: &Rc<RefCell<Env>>) -> Self {
         LoxObj::Callable(LoxFn::User(LoxUserFn::from_def(def, closure)))
     }
 }
@@ -104,6 +108,12 @@ pub enum LoxFn {
     // Native(String, Option<Args>),
 }
 
+impl LoxFn {
+    pub fn user_from_decl(decl: &FnDeclArgs, closure: &Rc<RefCell<Env>>) -> Self {
+        LoxFn::User(LoxUserFn::from_def(decl, closure))
+    }
+}
+
 /// Runtime user-defined function
 #[derive(Clone, Debug)]
 pub struct LoxUserFn {
@@ -114,12 +124,89 @@ pub struct LoxUserFn {
 }
 
 impl LoxUserFn {
-    pub fn from_def(def: &FnDef, closure: &Rc<RefCell<Env>>) -> Self {
+    pub fn from_def(decl: &FnDeclArgs, closure: &Rc<RefCell<Env>>) -> Self {
         let env = Env::from_parent(&closure);
         Self {
-            body: def.body.stmts.clone(),
-            params: def.params.clone(),
+            body: decl.body.stmts.clone(),
+            params: decl.params.clone(),
             closure: Rc::clone(closure),
         }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct LoxClass {
+    pub name: String,
+    pub methods: Vec<LoxFn>,
+}
+
+impl LoxClass {
+    pub fn from_decl(decl: &ClassDeclArgs, closure: &Rc<RefCell<Env>>) -> Self {
+        Self {
+            name: decl.name.clone(),
+            methods: decl
+                .methods
+                .iter()
+                .map(|m| LoxFn::user_from_decl(m, closure))
+                .collect(),
+        }
+    }
+}
+
+// PrettyPrint
+
+impl PrettyPrint for LoxValue {
+    fn pretty_print(&self) -> String {
+        match *self {
+            LoxValue::Nil => "Nil".into(),
+            LoxValue::Bool(b) => {
+                if b {
+                    "true".into()
+                } else {
+                    "false".into()
+                }
+            }
+            LoxValue::StringLit(ref s) => format!("\"{}\"", s.clone()),
+            LoxValue::Number(n) => n.to_string(),
+        }
+    }
+}
+
+impl PrettyPrint for LoxObj {
+    fn pretty_print(&self) -> String {
+        match self {
+            LoxObj::Value(value) => value.pretty_print(),
+            LoxObj::Callable(call) => call.pretty_print(),
+            LoxObj::Class(class) => class.pretty_print(),
+        }
+    }
+}
+
+impl PrettyPrint for LoxFn {
+    fn pretty_print(&self) -> String {
+        match self {
+            LoxFn::Clock => "(fn clock)".into(),
+            LoxFn::User(ref user) => user.pretty_print(),
+        }
+    }
+}
+
+impl PrettyPrint for LoxUserFn {
+    fn pretty_print(&self) -> String {
+        pretty_printer::pretty_fn("runtime-fn", &self.params, &self.body)
+    }
+}
+
+impl PrettyPrint for LoxClass {
+    fn pretty_print(&self) -> String {
+        format!(
+            "(class {} ({}))",
+            &self.name,
+            self.methods
+                .iter()
+                .map(|f| f.pretty_print())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
     }
 }

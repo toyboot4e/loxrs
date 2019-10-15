@@ -1,4 +1,4 @@
-use crate::ast::stmt::{FnDef, Params};
+use crate::ast::stmt::{FnDeclArgs, Params};
 use crate::ast::{expr::*, stmt::*};
 use crate::lexer::token::*;
 use std::iter::Peekable;
@@ -235,11 +235,15 @@ where
         }
     }
 
-    /// decl → declFn | declVar | stmt ;
+    /// decl → declClass | declFn | declVar | stmt ;
     ///
     /// The root of parsing.
     fn decl(&mut self) -> Option<Result<Stmt>> {
         Some(match self.peek()?.token {
+            Token::Class => {
+                self.advance();
+                self.decl_class().map(|c| Stmt::Class(c))
+            }
             Token::Fn => {
                 self.advance();
                 self.decl_fn().map(|f| Stmt::Fn(f))
@@ -252,8 +256,21 @@ where
         })
     }
 
+    /// declClass  → "class" IDENTIFIER "{" function* "}" ;
+    fn decl_class(&mut self) -> Result<ClassDeclArgs> {
+        let name = self.try_consume_identifier()?;
+        self.try_consume(&Token::LeftBrace)?;
+        let mut methods = Vec::new();
+        while self.consume(&Token::Fn).is_some() {
+            let method = self.decl_fn()?;
+            methods.push(method);
+        }
+        self.try_consume(&Token::RightBrace)?;
+        Ok(ClassDeclArgs::new(name, methods))
+    }
+
     /// declFn  → "fn" IDENTIFIER "(" params? ")" block ;
-    fn decl_fn(&mut self) -> Result<FnDef> {
+    fn decl_fn(&mut self) -> Result<FnDeclArgs> {
         let name = self.try_consume_identifier()?;
 
         self.try_consume(&Token::LeftParen)?;
@@ -268,7 +285,7 @@ where
         self.try_consume(&Token::LeftBrace)?;
         let body = self.stmt_block()?;
 
-        Ok(FnDef::new(name, body, params))
+        Ok(FnDeclArgs::new(name, body, params))
     }
 
     /// params → IDENTIFIER ( "," IDENTIFIER )* ;

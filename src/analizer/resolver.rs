@@ -123,7 +123,7 @@ impl<'a> Resolver<'a> {
         Ok(())
     }
 
-    pub fn resolve_fn_args_and_body(&mut self, f: &FnDef, type_: FnType) -> Result<()> {
+    pub fn resolve_fn_args_and_body(&mut self, f: &FnDeclArgs, type_: FnType) -> Result<()> {
         // tracking state
         let enclosing = self.current_fn_type;
         self.current_fn_type = type_;
@@ -136,7 +136,7 @@ impl<'a> Resolver<'a> {
         result
     }
 
-    fn impl_resolve_fn_args_and_body(&mut self, f: &FnDef) -> Result<()> {
+    fn impl_resolve_fn_args_and_body(&mut self, f: &FnDeclArgs) -> Result<()> {
         if let Some(ref params) = f.params {
             for param in params {
                 self.declare(param)?;
@@ -154,7 +154,7 @@ impl<'a> StmtVisitor<Result<()>> for Resolver<'a> {
         Ok(())
     }
 
-    fn visit_fn_decl(&mut self, f: &FnDef) -> Result<()> {
+    fn visit_fn_decl(&mut self, f: &FnDeclArgs) -> Result<()> {
         self.declare(&f.name)?;
         self.define(&f.name); // we allow recursive function declaration
         self.resolve_fn_args_and_body(f, FnType::Fn)
@@ -193,6 +193,13 @@ impl<'a> StmtVisitor<Result<()>> for Resolver<'a> {
 
     fn visit_block_stmt(&mut self, stmts: &Vec<Stmt>) -> Result<()> {
         self.resolve_block(stmts)
+    }
+
+    fn visit_class_decl(&mut self, c: &ClassDeclArgs) -> Result<()> {
+        // Lox permits to declare a class as a local variable
+        self.declare(&c.name)?;
+        self.define(&c.name);
+        Ok(())
     }
 }
 

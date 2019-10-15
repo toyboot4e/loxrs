@@ -42,6 +42,7 @@ pub trait StmtVisitor<T> {
             Return(ret) => self.visit_return_stmt(ret),
             While(while_) => self.visit_while_stmt(while_),
             Fn(f) => self.visit_fn_decl(f),
+            Class(c) => self.visit_class_decl(c),
         }
     }
     fn visit_var_decl(&mut self, var: &VarDeclArgs) -> T;
@@ -56,5 +57,6 @@ pub trait StmtVisitor<T> {
     fn visit_return_stmt(&mut self, ret: &Return) -> T;
     fn visit_while_stmt(&mut self, while_: &WhileArgs) -> T;
     // TODO: disable clock as a variable name? (or distinguish two scopes like Lisp 2?)
-    fn visit_fn_decl(&mut self, f: &FnDef) -> T;
+    fn visit_fn_decl(&mut self, f: &FnDeclArgs) -> T;
+    fn visit_class_decl(&mut self, c: &ClassDeclArgs) -> T;
 }
