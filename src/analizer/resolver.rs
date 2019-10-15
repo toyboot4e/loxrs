@@ -1,5 +1,4 @@
-use crate::ast::{expr::*, stmt::*};
-use crate::runtime::{env::Env, ExprVisitor, StmtVisitor};
+use crate::ast::{expr::*, stmt::*, ExprVisitor, StmtVisitor};
 use ::std::collections::HashMap;
 
 type Result<T> = ::std::result::Result<T, SemantcicError>;
@@ -149,7 +148,7 @@ impl<'a> Resolver<'a> {
 }
 
 impl<'a> StmtVisitor<Result<()>> for Resolver<'a> {
-    fn visit_var_decl(&mut self, var: &VarDecArgs) -> Result<()> {
+    fn visit_var_decl(&mut self, var: &VarDeclArgs) -> Result<()> {
         self.declare(&var.name)?; // we forbid recursive variable declaration
         self.define(&var.name); // now it's initialized
         Ok(())
@@ -192,7 +191,7 @@ impl<'a> StmtVisitor<Result<()>> for Resolver<'a> {
         self.resolve_block(&while_.block.stmts)
     }
 
-    fn visit_block_stmt(&mut self, stmts: &Vec<Stmt>, env: Option<Env>) -> Result<()> {
+    fn visit_block_stmt(&mut self, stmts: &Vec<Stmt>) -> Result<()> {
         self.resolve_block(stmts)
     }
 }
