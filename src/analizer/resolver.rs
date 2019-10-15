@@ -1,5 +1,4 @@
-use crate::ast::{expr::*, stmt::*};
-use crate::runtime::{env::Env, ExprVisitor, StmtVisitor};
+use crate::ast::{expr::*, stmt::*, ExprVisitor, StmtVisitor};
 use ::std::collections::HashMap;
 
 type Result<T> = ::std::result::Result<T, SemantcicError>;
@@ -22,7 +21,7 @@ pub enum FnType {
 }
 
 type Scope = HashMap<String, bool>;
-type Caches = HashMap<VariableArgs, usize>;
+type Caches = HashMap<VarUseData, usize>;
 
 /// Tracks objects in local scope, analizes them and provides a way to map each variable usage
 /// to specific variable in AST.
@@ -52,7 +51,7 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn resolve_local_var(&mut self, var: &VariableArgs) {
+    fn resolve_local_var(&mut self, var: &VarUseData) {
         if let Some(d) = self
             .scopes
             .iter()
@@ -149,7 +148,7 @@ impl<'a> Resolver<'a> {
 }
 
 impl<'a> StmtVisitor<Result<()>> for Resolver<'a> {
-    fn visit_var_decl(&mut self, var: &VarDecArgs) -> Result<()> {
+    fn visit_var_decl(&mut self, var: &VarDeclArgs) -> Result<()> {
         self.declare(&var.name)?; // we forbid recursive variable declaration
         self.define(&var.name); // now it's initialized
         Ok(())
@@ -192,13 +191,13 @@ impl<'a> StmtVisitor<Result<()>> for Resolver<'a> {
         self.resolve_block(&while_.block.stmts)
     }
 
-    fn visit_block_stmt(&mut self, stmts: &Vec<Stmt>, env: Option<Env>) -> Result<()> {
+    fn visit_block_stmt(&mut self, stmts: &Vec<Stmt>) -> Result<()> {
         self.resolve_block(stmts)
     }
 }
 
 impl<'a> ExprVisitor<Result<()>> for Resolver<'a> {
-    fn visit_var_expr(&mut self, var: &VariableArgs) -> Result<()> {
+    fn visit_var_expr(&mut self, var: &VarUseData) -> Result<()> {
         // we forbid duplicate variable declaration
         if let Some(scope) = self.scopes.last() {
             if scope.get(&var.name) == Some(&false) {
@@ -212,7 +211,7 @@ impl<'a> ExprVisitor<Result<()>> for Resolver<'a> {
         Ok(())
     }
 
-    fn visit_assign_expr(&mut self, assign: &AssignArgs) -> Result<()> {
+    fn visit_assign_expr(&mut self, assign: &AssignData) -> Result<()> {
         self.resolve_expr(&assign.expr)?;
         self.resolve_local_var(&assign.assigned);
         Ok(())
@@ -220,12 +219,12 @@ impl<'a> ExprVisitor<Result<()>> for Resolver<'a> {
 
     // the rest is just passing each expr to the resolving method
 
-    fn visit_binary_expr(&mut self, binary: &BinaryArgs) -> Result<()> {
+    fn visit_binary_expr(&mut self, binary: &BinaryData) -> Result<()> {
         self.resolve_expr(&binary.left)?;
         self.resolve_expr(&binary.right)
     }
 
-    fn visit_call_expr(&mut self, call: &CallArgs) -> Result<()> {
+    fn visit_call_expr(&mut self, call: &CallData) -> Result<()> {
         self.resolve_expr(&call.callee)?;
         if let Some(ref args) = call.args {
             for arg in args {
@@ -235,16 +234,16 @@ impl<'a> ExprVisitor<Result<()>> for Resolver<'a> {
         Ok(())
     }
 
-    fn visit_logic_expr(&mut self, logic: &LogicArgs) -> Result<()> {
+    fn visit_logic_expr(&mut self, logic: &LogicData) -> Result<()> {
         self.resolve_expr(&logic.left)?;
         self.resolve_expr(&logic.right)
     }
 
-    fn visit_unary_expr(&mut self, unary: &UnaryArgs) -> Result<()> {
+    fn visit_unary_expr(&mut self, unary: &UnaryData) -> Result<()> {
         self.resolve_expr(&unary.expr)
     }
 
-    fn visit_literal_expr(&mut self, literal: &LiteralArgs) -> Result<()> {
+    fn visit_literal_expr(&mut self, literal: &LiteralData) -> Result<()> {
         Ok(()) // there's no variable mentioned
     }
 }

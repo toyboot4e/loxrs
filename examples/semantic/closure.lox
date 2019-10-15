@@ -1,5 +1,5 @@
 print "ok if the output is: global -> global -> block";
-print ""
+print "";
 
 var a = "global";
 {

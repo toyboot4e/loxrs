@@ -5,25 +5,25 @@ use std::convert::From;
 // in `Resolver`.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expr {
-    Literal(LiteralArgs),
-    Unary(Box<UnaryArgs>),
-    Binary(Box<BinaryArgs>),
-    Logic(Box<LogicArgs>),
-    Grouping(Box<GroupingArgs>),
+    Literal(LiteralData),
+    Unary(Box<UnaryData>),
+    Binary(Box<BinaryData>),
+    Logic(Box<LogicData>),
+    Grouping(Box<GroupData>),
     // TODO: rename me; it may be function
-    Variable(VariableArgs),
-    Assign(Box<AssignArgs>),
-    Call(Box<CallArgs>),
+    Variable(VarUseData),
+    Assign(Box<AssignData>),
+    Call(Box<CallData>),
 }
 
 /// Helpers for constructing / right recursive parsing
 impl Expr {
-    pub fn literal(args: LiteralArgs) -> Expr {
+    pub fn literal(args: LiteralData) -> Expr {
         Expr::Literal(args)
     }
 
     pub fn unary(oper: UnaryOper, expr: Expr) -> Expr {
-        Expr::Unary(Box::new(UnaryArgs {
+        Expr::Unary(Box::new(UnaryData {
             oper: oper,
             expr: expr,
         }))
@@ -31,7 +31,7 @@ impl Expr {
 
     /// comparison, addition, or multiplication
     pub fn binary(left: Expr, oper: BinaryOper, right: Expr) -> Expr {
-        Expr::Binary(Box::new(BinaryArgs {
+        Expr::Binary(Box::new(BinaryData {
             left: left,
             oper: oper,
             right: right,
@@ -39,7 +39,7 @@ impl Expr {
     }
 
     pub fn logic(left: Expr, oper: LogicOper, right: Expr) -> Expr {
-        Expr::Logic(Box::new(LogicArgs {
+        Expr::Logic(Box::new(LogicData {
             left: left,
             oper: oper,
             right: right,
@@ -47,78 +47,78 @@ impl Expr {
     }
 
     pub fn group(expr: Expr) -> Expr {
-        Expr::Grouping(Box::new(GroupingArgs { expr: expr }))
+        Expr::Grouping(Box::new(GroupData { expr: expr }))
     }
 
     pub fn var(name: &str, id: VarUseId) -> Expr {
-        Expr::Variable(VariableArgs::new(name, id))
+        Expr::Variable(VarUseData::new(name, id))
     }
 
     pub fn assign(name: &str, expr: Expr, id: VarUseId) -> Expr {
-        Expr::Assign(Box::new(AssignArgs {
-            assigned: VariableArgs::new(name, id),
+        Expr::Assign(Box::new(AssignData {
+            assigned: VarUseData::new(name, id),
             expr: expr,
         }))
     }
 
     pub fn call(callee: Expr, args: Option<Args>) -> Self {
-        Expr::Call(Box::new(CallArgs {
+        Expr::Call(Box::new(CallData {
             callee: callee,
             args: args,
         }))
     }
 }
 
-impl From<LiteralArgs> for Expr {
-    fn from(item: LiteralArgs) -> Self {
+impl From<LiteralData> for Expr {
+    fn from(item: LiteralData) -> Self {
         Expr::Literal(item)
     }
 }
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
-pub enum LiteralArgs {
+pub enum LiteralData {
     Nil,
     Bool(bool),
     StringLit(String),
     Number(f64),
 }
 
-impl LiteralArgs {
-    /// Maps specific tokens to `Option::Some(LiteralArgs)`
-    pub fn from_token(token: &Token) -> Option<LiteralArgs> {
+impl LiteralData {
+    /// Maps specific tokens to `Option::Some(LiteralData)`
+    pub fn from_token(token: &Token) -> Option<LiteralData> {
         use Token::*;
         Some(match token {
-            Nil => LiteralArgs::Nil,
-            True => LiteralArgs::Bool(true),
-            False => LiteralArgs::Bool(false),
-            String(ref s) => LiteralArgs::StringLit(s.clone()),
-            Number(n) => LiteralArgs::Number(n.clone()),
+            Nil => LiteralData::Nil,
+            True => LiteralData::Bool(true),
+            False => LiteralData::Bool(false),
+            String(ref s) => LiteralData::StringLit(s.clone()),
+            Number(n) => LiteralData::Number(n.clone()),
             _ => return None,
         })
     }
 }
 
 // They are convenient for writing tests.
-impl From<f64> for LiteralArgs {
+impl From<f64> for LiteralData {
     fn from(item: f64) -> Self {
-        LiteralArgs::Number(item)
+        LiteralData::Number(item)
     }
 }
 
-impl From<String> for LiteralArgs {
+impl From<String> for LiteralData {
     fn from(item: String) -> Self {
-        LiteralArgs::StringLit(item)
+        LiteralData::StringLit(item)
     }
 }
 
-impl From<bool> for LiteralArgs {
+impl From<bool> for LiteralData {
     fn from(item: bool) -> Self {
-        LiteralArgs::Bool(item)
+        LiteralData::Bool(item)
     }
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct UnaryArgs {
+pub struct UnaryData {
     pub oper: UnaryOper,
     pub expr: Expr,
 }
@@ -141,7 +141,7 @@ impl From<Token> for Option<UnaryOper> {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct BinaryArgs {
+pub struct BinaryData {
     pub left: Expr,
     pub oper: BinaryOper,
     pub right: Expr,
@@ -192,7 +192,7 @@ impl From<Token> for Option<BinaryOper> {
 
 /// `&&` or `||`
 #[derive(Clone, Debug, PartialEq)]
-pub struct LogicArgs {
+pub struct LogicData {
     pub left: Expr,
     pub oper: LogicOper,
     pub right: Expr,
@@ -217,7 +217,7 @@ impl From<Token> for Option<LogicOper> {
 
 /// `()`
 #[derive(Clone, Debug, PartialEq)]
-pub struct GroupingArgs {
+pub struct GroupData {
     pub expr: Expr,
 }
 
@@ -255,13 +255,13 @@ impl VarUseIdCounter {
 
 /// Represents a variable use
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct VariableArgs {
+pub struct VarUseData {
     pub name: String,
     /// Unique identity of each variable use
     pub id: VarUseId,
 }
 
-impl VariableArgs {
+impl VarUseData {
     pub fn new(name: &str, id: VarUseId) -> Self {
         Self {
             name: name.to_string(),
@@ -272,8 +272,8 @@ impl VariableArgs {
 
 /// `=`,  only parsed as an expression statement.
 #[derive(Clone, Debug, PartialEq)]
-pub struct AssignArgs {
-    pub assigned: VariableArgs,
+pub struct AssignData {
+    pub assigned: VarUseData,
     pub expr: Expr,
 }
 
@@ -295,7 +295,7 @@ impl From<Token> for Option<AssignOper> {
 pub type Args = Vec<Expr>;
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct CallArgs {
+pub struct CallData {
     pub callee: Expr,
     pub args: Option<Args>,
 }

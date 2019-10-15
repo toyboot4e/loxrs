@@ -1,10 +1,8 @@
 pub mod env;
 mod interpreter;
 pub mod obj;
-mod visitor;
 
 pub use interpreter::Interpreter;
-pub use visitor::{ExprVisitor, StmtVisitor};
 
 pub type Result<T> = ::std::result::Result<T, RuntimeError>;
 

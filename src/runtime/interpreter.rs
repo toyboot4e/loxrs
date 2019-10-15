@@ -2,13 +2,12 @@ use ::std::cell::RefCell;
 use ::std::collections::HashMap;
 use ::std::rc::Rc;
 use ::std::time::SystemTime;
+use std::cmp::Ordering;
 
-use super::env::Env;
-use super::visitor::StmtVisitor;
-
-use crate::ast::{expr::*, stmt::*, PrettyPrint};
+use crate::ast::{expr::*, stmt::*, ExprVisitor, PrettyPrint, StmtVisitor};
+use crate::runtime::env::Env;
 use crate::runtime::{
-    obj::{LoxFn, LoxObj, LoxValue},
+    obj::{LoxFn, LoxObj, LoxUserFn, LoxValue},
     Result, RuntimeError,
 };
 
@@ -21,12 +20,12 @@ pub struct Interpreter {
     /// The time interpretation started. Required for `clock` native function.
     begin_time: SystemTime,
     /// Maps each identifier in local scope to the distance to the scope it's in.
-    pub caches: HashMap<VariableArgs, usize>,
+    pub caches: HashMap<VarUseData, usize>,
 }
 
 /// Capabilities provided by `Resolver`
 impl Interpreter {
-    fn lookup_resolved(&self, var: &VariableArgs) -> Result<LoxObj> {
+    fn lookup_resolved(&self, var: &VarUseData) -> Result<LoxObj> {
         if let Some(d) = self.caches.get(var) {
             // it's a local variable resoled
             self.env.borrow().get_resolved(&var.name, d.clone())
@@ -56,48 +55,75 @@ impl Interpreter {
         env
     }
 
-    /// The entry point of interpretation
+    /// The entry point of statement interpretation
     pub fn interpret(&mut self, stmt: &Stmt) -> Result<Option<LoxObj>> {
         self.visit_stmt(stmt)
     }
 
-    /// Invokes a given function object
+    /// Interpretes a block of statements
+    fn interpret_stmts(&mut self, stmts: &[Stmt]) -> Result<Option<LoxObj>> {
+        for stmt in stmts.iter() {
+            if let Some(obj) = self.interpret(stmt)? {
+                return Ok(Some(obj)); // `return` statemenet considered
+            }
+        }
+        Ok(None)
+    }
+
+    /// Intepretes a block in a scope
+    fn interpret_stmts_with_scope(&mut self, stmts: &[Stmt], scope: Env) -> Result<Option<LoxObj>> {
+        let prev = Rc::clone(&self.env);
+        self.env = Rc::new(RefCell::new(scope));
+        let result = self.interpret_stmts(stmts);
+        self.env = prev;
+        result
+    }
+
+    /// Invokes a given function object (native or user-defined)
     pub fn invoke(&mut self, fn_obj: &LoxFn, args: &Option<Args>) -> Result<Option<LoxObj>> {
-        let def = match fn_obj {
-            LoxFn::User(ref def) => def,
+        match fn_obj {
+            LoxFn::User(ref def) => self.invoke_user_fn(def, args),
             LoxFn::Clock => {
                 let s = self.native_clock(args)?;
-                return Ok(Some(LoxObj::Value(s)));
+                Ok(Some(LoxObj::Value(s)))
             }
-        };
+        }
+    }
 
+    pub fn invoke_user_fn(
+        &mut self,
+        def: &LoxUserFn,
+        args: &Option<Args>,
+    ) -> Result<Option<LoxObj>> {
         Self::validate_arities(
             def.params.as_ref().map(|xs| xs.len()),
             args.as_ref().map(|xs| xs.len()),
         )?;
-
-        // create new environment with the arguments
-        let mut new_env = Env::from_parent(&self.env);
-        if let (Some(params), Some(args)) = (&def.params, args) {
-            for i in 0..params.len() {
-                new_env.define(params[i].as_str(), self.eval_expr(&args[i])?)?;
-            }
-        }
-
-        let result = self.visit_block_stmt(&def.body, Some(new_env))?;
-        Ok(result)
+        let scope = match def.params {
+            Some(ref params) => self.scope_from_args(params, args.as_ref().unwrap())?,
+            None => Env::from_parent(&self.env),
+        };
+        self.interpret_stmts_with_scope(&def.body, scope)
     }
 
     /// Compares two arities (each of which may be None) and makes sure they match
-    fn validate_arities(n1: Option<usize>, n2: Option<usize>) -> Result<Option<LoxObj>> {
+    fn validate_arities(n1: Option<usize>, n2: Option<usize>) -> Result<()> {
         match (n1, n2) {
-            (None, None) => Ok(None),
+            (None, None) => Ok(()),
             (Some(_), None) | (None, Some(_)) => Err(RuntimeError::WrongNumberOfArguments),
             (Some(len_params), Some(len_args)) if len_params != len_args => {
                 Err(RuntimeError::WrongNumberOfArguments)
             }
-            _ => Ok(None),
+            _ => Ok(()),
         }
+    }
+
+    fn scope_from_args(&mut self, params: &[String], args: &[Expr]) -> Result<Env> {
+        let mut scope = Env::from_parent(&self.env);
+        for i in 0..params.len() {
+            scope.define(params[i].as_str(), self.eval_expr(&args[i])?)?;
+        }
+        Ok(scope)
     }
 
     /// Milli seconds since the Lox program is started
@@ -143,7 +169,7 @@ impl StmtVisitor<Result<Option<LoxObj>>> for Interpreter {
         Ok(None)
     }
 
-    fn visit_var_decl(&mut self, var: &VarDecArgs) -> Result<Option<LoxObj>> {
+    fn visit_var_decl(&mut self, var: &VarDeclArgs) -> Result<Option<LoxObj>> {
         let name = &var.name;
         let obj = self.eval_expr(&var.init)?;
         self.env.borrow_mut().define(name, obj)?;
@@ -160,32 +186,8 @@ impl StmtVisitor<Result<Option<LoxObj>>> for Interpreter {
         }
     }
 
-    fn visit_block_stmt(
-        &mut self,
-        stmts: &Vec<Stmt>,
-        new_env: Option<Env>,
-    ) -> Result<Option<LoxObj>> {
-        let new_env = new_env.unwrap_or_else(|| Env::from_parent(&self.env));
-
-        let prev = Rc::clone(&self.env);
-        self.env = Rc::new(RefCell::new(new_env));
-
-        for stmt in stmts.iter() {
-            match self.interpret(stmt) {
-                Err(why) => {
-                    self.env = prev;
-                    return Err(why);
-                }
-                // early returns considered
-                Ok(Some(obj)) => {
-                    self.env = prev;
-                    return Ok(Some(obj));
-                }
-                _ => {}
-            }
-        }
-        self.env = prev;
-        Ok(None)
+    fn visit_block_stmt(&mut self, stmts: &Vec<Stmt>) -> Result<Option<LoxObj>> {
+        self.interpret_stmts_with_scope(stmts, Env::from_parent(&self.env))
     }
 
     // TODO: enable returning even outside block
@@ -197,7 +199,7 @@ impl StmtVisitor<Result<Option<LoxObj>>> for Interpreter {
     fn visit_while_stmt(&mut self, while_: &WhileArgs) -> Result<Option<LoxObj>> {
         while self.eval_expr(&while_.condition)?.is_truthy() {
             // early return considered
-            self.visit_block_stmt(&while_.block.stmts, None)?;
+            self.interpret_stmts_with_scope(&while_.block.stmts, Env::from_parent(&self.env))?;
         }
         Ok(None)
     }
@@ -283,16 +285,13 @@ mod logic {
     }
 }
 
-use crate::runtime::visitor::ExprVisitor;
-use std::cmp::Ordering;
-
 /// Visitors for implementing `eval_expr`
 impl ExprVisitor<Result<LoxObj>> for Interpreter {
-    fn visit_literal_expr(&mut self, lit: &LiteralArgs) -> Result<LoxObj> {
+    fn visit_literal_expr(&mut self, lit: &LiteralData) -> Result<LoxObj> {
         Ok(ValObj(LoxValue::from_lit(lit)))
     }
 
-    fn visit_unary_expr(&mut self, unary: &UnaryArgs) -> Result<LoxObj> {
+    fn visit_unary_expr(&mut self, unary: &UnaryData) -> Result<LoxObj> {
         let obj = self.visit_expr(&unary.expr)?;
         use UnaryOper::*;
         match &unary.oper {
@@ -305,7 +304,7 @@ impl ExprVisitor<Result<LoxObj>> for Interpreter {
     }
 
     /// `==`, `!=`, `<`, `<=`, `>`, `>=`, `+`, `-`, `*`, `/`
-    fn visit_binary_expr(&mut self, binary: &BinaryArgs) -> Result<LoxObj> {
+    fn visit_binary_expr(&mut self, binary: &BinaryData) -> Result<LoxObj> {
         use BinaryOper::*;
         let oper = binary.oper.clone();
 
@@ -351,7 +350,7 @@ impl ExprVisitor<Result<LoxObj>> for Interpreter {
     }
 
     /// `&&`, `||`
-    fn visit_logic_expr(&mut self, logic: &LogicArgs) -> Result<LoxObj> {
+    fn visit_logic_expr(&mut self, logic: &LogicData) -> Result<LoxObj> {
         let oper = logic.oper.clone();
         let left_truthy = self.visit_expr(&logic.left)?.is_truthy();
         Ok(match oper {
@@ -368,11 +367,11 @@ impl ExprVisitor<Result<LoxObj>> for Interpreter {
         })
     }
 
-    fn visit_var_expr(&mut self, var: &VariableArgs) -> Result<LoxObj> {
+    fn visit_var_expr(&mut self, var: &VarUseData) -> Result<LoxObj> {
         self.lookup_resolved(&var)
     }
 
-    fn visit_assign_expr(&mut self, assign: &AssignArgs) -> Result<LoxObj> {
+    fn visit_assign_expr(&mut self, assign: &AssignData) -> Result<LoxObj> {
         let obj = self.eval_expr(&assign.expr)?;
         self.env
             .borrow_mut()
@@ -380,7 +379,7 @@ impl ExprVisitor<Result<LoxObj>> for Interpreter {
         Ok(obj)
     }
 
-    fn visit_call_expr(&mut self, call: &CallArgs) -> Result<LoxObj> {
+    fn visit_call_expr(&mut self, call: &CallData) -> Result<LoxObj> {
         if let LoxObj::Callable(ref fn_obj) = self.eval_expr(&call.callee)? {
             let obj = self
                 .invoke(fn_obj, &call.args)?

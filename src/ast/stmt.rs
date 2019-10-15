@@ -28,7 +28,7 @@ pub enum Stmt {
     Expr(Expr),
     Fn(FnDef),
     Print(PrintArgs),
-    Var(VarDecArgs),
+    Var(VarDeclArgs),
     If(Box<IfArgs>),
     Return(Return),
     While(WhileArgs),
@@ -45,7 +45,7 @@ impl Stmt {
     }
 
     pub fn var_dec(name: String, init: Expr) -> Self {
-        Stmt::Var(VarDecArgs::new(name, init))
+        Stmt::Var(VarDeclArgs::new(name, init))
     }
 
     pub fn if_then_else(condition: Expr, then: Stmt, else_: Option<Stmt>) -> Self {
@@ -79,8 +79,8 @@ impl From<PrintArgs> for Stmt {
     }
 }
 
-impl From<VarDecArgs> for Stmt {
-    fn from(item: VarDecArgs) -> Self {
+impl From<VarDeclArgs> for Stmt {
+    fn from(item: VarDeclArgs) -> Self {
         Stmt::Var(item)
     }
 }
@@ -92,7 +92,7 @@ pub struct PrintArgs {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct VarDecArgs {
+pub struct VarDeclArgs {
     pub name: String,
     pub init: Expr,
 }
@@ -108,7 +108,7 @@ pub struct IfArgs {
     pub if_false: Option<Stmt>,
 }
 
-impl VarDecArgs {
+impl VarDeclArgs {
     /// Unlike the original Lox language, loxrs always requires initializer for declarations
     pub fn new(name: String, init: Expr) -> Self {
         Self {
@@ -140,3 +140,4 @@ pub struct WhileArgs {
     pub condition: Expr,
     pub block: BlockArgs,
 }
+
