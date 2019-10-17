@@ -253,4 +253,8 @@ impl<'a> ExprVisitor<Result<()>> for Resolver<'a> {
     fn visit_literal_expr(&mut self, literal: &LiteralData) -> Result<()> {
         Ok(()) // there's no variable mentioned
     }
+
+    fn visit_prop_expr(&mut self, prop: &PropUseData) -> Result<()> {
+        self.resolve_expr(&prop.body)
+    }
 }

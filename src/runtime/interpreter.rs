@@ -399,4 +399,15 @@ impl ExprVisitor<Result<LoxObj>> for Interpreter {
             Err(RuntimeError::MismatchedType)
         }
     }
+
+    fn visit_prop_expr(&mut self, prop: &PropUseData) -> Result<LoxObj> {
+        let obj = self.eval_expr(&prop.body)?;
+        match obj {
+            LoxObj::Instance(ref instance) => {
+                let prop = instance.get(&prop.name)?;
+            }
+            _ => return Err(RuntimeError::NotForScopeOperator),
+        }
+        Ok(obj)
+    }
 }

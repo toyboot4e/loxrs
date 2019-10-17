@@ -5,9 +5,10 @@ use crate::ast::{
     pretty_printer::{self, PrettyPrint},
     stmt::{ClassDeclArgs, FnDeclArgs, Params, Stmt},
 };
-use crate::runtime::env::Env;
+use crate::runtime::{env::Env, Result, RuntimeError};
 use ::std::cell::RefCell;
-use ::std::rc::Rc;
+use ::std::collections::HashMap;
+use ::std::rc::{Rc, Weak};
 
 /// Runtime object which represents anything
 #[derive(Clone, Debug)]
@@ -15,6 +16,7 @@ pub enum LoxObj {
     Value(LoxValue),
     Callable(LoxFn),
     Class(LoxClass),
+    Instance(LoxInstance),
 }
 
 impl LoxObj {
@@ -121,6 +123,7 @@ pub struct LoxUserFn {
     pub params: Option<Params>,
     // TODO: disable mutation
     pub closure: Rc<RefCell<Env>>,
+    // TODO: should have name in field or not
 }
 
 impl LoxUserFn {
@@ -153,6 +156,24 @@ impl LoxClass {
     }
 }
 
+/// Instance of a `LoxClass`
+#[derive(Clone, Debug)]
+pub struct LoxInstance {
+    // FIXME: use indirect access to a class
+    class: Weak<LoxClass>,
+    fields: HashMap<String, LoxObj>,
+}
+
+impl LoxInstance {
+    // TODO: maybe enable immutable access
+    pub fn get(&self, name: &str) -> Result<LoxObj> {
+        self.fields
+            .get(name)
+            .map(|obj| obj.clone())
+            .ok_or_else(|| RuntimeError::NoFieldWithName(name.to_string()))
+    }
+}
+
 // PrettyPrint
 
 impl PrettyPrint for LoxValue {
@@ -178,6 +199,7 @@ impl PrettyPrint for LoxObj {
             LoxObj::Value(value) => value.pretty_print(),
             LoxObj::Callable(call) => call.pretty_print(),
             LoxObj::Class(class) => class.pretty_print(),
+            LoxObj::Instance(instance) => instance.pretty_print(),
         }
     }
 }
@@ -197,6 +219,7 @@ impl PrettyPrint for LoxUserFn {
     }
 }
 
+// TODO: more efficient string generation
 impl PrettyPrint for LoxClass {
     fn pretty_print(&self) -> String {
         format!(
@@ -210,3 +233,18 @@ impl PrettyPrint for LoxClass {
         )
     }
 }
+
+impl PrettyPrint for LoxInstance {
+    fn pretty_print(&self) -> String {
+        format!(
+            "(instance {} ({}))",
+            self.class.upgrade().unwrap().pretty_print(),
+            self.fields
+                .iter()
+                .map(|(key, value)| format!("({} {})", key, value.pretty_print()))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
+}
+

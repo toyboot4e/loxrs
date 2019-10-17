@@ -1,13 +1,13 @@
-//! Pretty prints expression
+//! Prints expression in a pretty format
 
 // TODO: indent for nested blocks
 // TODO: use ::std::fmt::Display
 
-fn vec_to_s(xs: impl IntoIterator<Item = impl ::std::fmt::Debug>) -> String {
+fn vec_to_s(xs: impl IntoIterator<Item = impl ::std::fmt::Display>) -> String {
     format!(
         "({})",
         xs.into_iter()
-            .map(|x| format!("{:?}", x))
+            .map(|x| format!("{}", x))
             .collect::<Vec<_>>()
             .join(", ".into())
     )
@@ -31,6 +31,7 @@ impl PrettyPrint for Expr {
             Variable(ref var) => format!("{}", var.name),
             Assign(ref a) => a.pretty_print(),
             Call(ref call) => call.pretty_print(),
+            Prop(ref prop) => prop.pretty_print(),
         }
     }
 }
@@ -158,6 +159,12 @@ impl PrettyPrint for CallData {
                 None => "()".to_string(),
             }
         )
+    }
+}
+
+impl PrettyPrint for PropUseData {
+    fn pretty_print(&self) -> String {
+        format!("(prop {} {})", self.name, self.body.pretty_print())
     }
 }
 

@@ -558,7 +558,7 @@ where
         self.rrp(&Self::expr_unary, &[Slash, Star], &Expr::binary)
     }
 
-    /// unary → ( "!" | "-" ) unary | primary | call ;
+    /// unary → ( "!" | "-" ) unary | call ;
     fn expr_unary(&mut self) -> Result<Expr> {
         use Token::*;
         match self.try_peek()?.token {
@@ -574,29 +574,40 @@ where
         }
     }
 
-    /// call → primary invoke* ;
-    ///
-    /// invoke → "(" args ")" ;
-    /// args → expr ( "," expr )* ;
+    /// call → primary (invoke|prop)* ;
     fn expr_call(&mut self) -> Result<Expr> {
         let mut expr = self.expr_prim()?;
-        if self.try_peek()?.token != Token::LeftParen {
-            return Ok(expr); // prim
-        }
 
         // TODO: use right recursive parsing
-        // invoke*
-        while self.consume(&Token::LeftParen).is_some() {
-            let args = if self.try_peek()?.token == Token::RightParen {
-                None
-            } else {
-                Some(self.expr_call_args()?)
-            };
-            self.try_consume(&Token::RightParen)?;
-            expr = Expr::call(expr, args);
-        }
+        loop {
+            match self.try_peek()?.token {
+                Token::LeftParen => {
+                    // invoke → "(" args ")"
+                    self.advance();
+                    let args = if self.try_peek()?.token == Token::RightParen {
+                        self.advance();
+                        None
+                    } else {
+                        let args = self.expr_call_args()?;
+                        self.try_consume(&Token::RightParen)?;
+                        Some(args)
+                    };
+                    expr = Expr::call(expr, args);
+                }
 
-        Ok(expr)
+                Token::Dot => {
+                    self.advance();
+                    // prop → "." identifier
+                    self.expr_call_prop()?;
+                    let name = self.try_consume_identifier()?;
+                    // TODO: combine
+                }
+
+                _ => {
+                    return Ok(expr);
+                }
+            }
+        }
     }
 
     /// args → expr ( "," expr )* ;
@@ -620,6 +631,11 @@ where
                 }
             }
         }
+    }
+
+    /// prop → "." identifier ;
+    fn expr_call_prop(&mut self) -> Result<Args> {
+        unimplemented!()
     }
 
     /// primary → literal | group |indentifier ;

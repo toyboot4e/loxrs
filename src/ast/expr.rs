@@ -14,6 +14,7 @@ pub enum Expr {
     Variable(VarUseData),
     Assign(Box<AssignData>),
     Call(Box<CallData>),
+    Prop(Box<PropUseData>),
 }
 
 /// Helpers for constructing / right recursive parsing
@@ -292,10 +293,29 @@ impl From<Token> for Option<AssignOper> {
     }
 }
 
+// TODO: never use `Option<Args>`
 pub type Args = Vec<Expr>;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CallData {
     pub callee: Expr,
+    // FIXME: just use `Args` type
     pub args: Option<Args>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct PropUseData {
+    pub body: Expr,
+    pub name: String,
+    pub id: VarUseId,
+}
+
+impl PropUseData {
+    pub fn new(body: Expr, name: String, id: VarUseId) -> Self {
+        Self {
+            body: body,
+            name: name,
+            id: id,
+        }
+    }
 }
