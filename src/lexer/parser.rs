@@ -494,30 +494,37 @@ where
 
     /// expr → assignment
     pub fn expr(&mut self) -> Result<Expr> {
-        self.assignment()
+        self.expr_assign()
     }
 
-    /// assignment → IDENTIFIER "=" assignment
-    ///            | logic_or ;
-    fn assignment(&mut self) -> Result<Expr> {
-        let expr = self.expr_or()?; // may be an identifier
+    /// assignment → ( call "." )? IDENTIFIER "=" assignment
+    ///            | logic_or;
+    fn expr_assign(&mut self) -> Result<Expr> {
+        let lhs = self.expr_or()?;
 
         // peek to see if it's an assignment
-        match self.try_peek()?.token {
-            Token::Equal => {}
-            _ => {
-                return Ok(expr);
-            }
+        if self.consume(&Token::Equal).is_none() {
+            return Ok(lhs);
         };
 
-        // previous `Expr` must be assignable (`Expr::Variable`)
-        let name = match expr {
-            Expr::Variable(ref var) => &var.name,
-            e => return Err(ParseError::NotAssignable(e)),
+        // FIXME: do not `clone` the name. consider using `unsafe`
+        // (Expr::set should just require &Expr for efficiency, but move is semantically proper)
+        let name = match lhs {
+            // assign
+            Expr::Variable(ref var) => {
+                let rhs = self.expr_assign()?;
+                return Ok(Expr::assign(&var.name, rhs, self.counter.next()));
+            }
+            // set (assign to get expression)
+            Expr::Get(ref get) => get.name.clone(),
+            // error
+            _ => {
+                return Err(ParseError::NotAssignable(lhs));
+            }
         };
-        self.advance(); // =
-        let right = self.assignment()?;
-        Ok(Expr::assign(name, right, self.counter.next()))
+        let rhs = self.expr_assign()?;
+        // TODO: needs identity?
+        return Ok(Expr::set(lhs, name.as_str(), rhs));
     }
 
     /// logic_or → logicAnd ("||" logicAnd)*

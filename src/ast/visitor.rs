@@ -17,7 +17,8 @@ pub trait ExprVisitor<T> {
             Variable(var) => self.visit_var_expr(var),
             Assign(args) => self.visit_assign_expr(args.as_ref()),
             Call(call) => self.visit_call_expr(call.as_ref()),
-            Prop(prop) => self.visit_prop_expr(prop.as_ref()),
+            Get(get) => self.visit_get_expr(get.as_ref()),
+            Set(set) => self.visit_set_expr(set.as_ref()),
         }
     }
     fn visit_literal_expr(&mut self, literal: &LiteralData) -> T;
@@ -27,7 +28,8 @@ pub trait ExprVisitor<T> {
     fn visit_var_expr(&mut self, var: &VarUseData) -> T;
     fn visit_assign_expr(&mut self, assign: &AssignData) -> T;
     fn visit_call_expr(&mut self, call: &CallData) -> T;
-    fn visit_prop_expr(&mut self, prop: &PropUseData) -> T;
+    fn visit_get_expr(&mut self, get: &GetUseData) -> T;
+    fn visit_set_expr(&mut self, set: &SetUseData) -> T;
 }
 
 /// Automates double dispatches

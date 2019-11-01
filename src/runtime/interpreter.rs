@@ -7,7 +7,7 @@ use std::cmp::Ordering;
 use crate::ast::{expr::*, stmt::*, ExprVisitor, PrettyPrint, StmtVisitor};
 use crate::runtime::env::Env;
 use crate::runtime::{
-    obj::{LoxFn, LoxObj, LoxUserFn, LoxValue},
+    obj::{LoxClass, LoxFn, LoxInstance, LoxObj, LoxUserFn, LoxValue},
     Result, RuntimeError,
 };
 
@@ -212,7 +212,18 @@ impl StmtVisitor<Result<Option<LoxObj>>> for Interpreter {
 
     // TODO: do not clone
     fn visit_class_decl(&mut self, c: &ClassDeclArgs) -> Result<Option<LoxObj>> {
-        self.env.borrow_mut().define(&c.name, LoxObj::nil())?;
+        let mut methods = HashMap::<String, LoxFn>::new();
+        for method in c.methods.iter() {
+            let f = LoxFn::from_decl(method, &self.env);
+            methods.insert(method.name.to_owned(), f);
+        }
+        let class = LoxClass {
+            name: c.name.to_owned(),
+            methods: methods,
+        };
+        self.env
+            .borrow_mut()
+            .define(&c.name, LoxObj::Class(Rc::new(class)))?;
         // self.env
         //     .borrow_mut()
         //     .assign(&c.name, LoxObj::Class(LoxClass::new(
@@ -386,28 +397,50 @@ impl ExprVisitor<Result<LoxObj>> for Interpreter {
         self.env
             .borrow_mut()
             .assign(assign.assigned.name.as_str(), obj.clone())?;
+        // TODO: maybe forbid chaning assign expression
         Ok(obj)
     }
 
     fn visit_call_expr(&mut self, call: &CallData) -> Result<LoxObj> {
-        if let LoxObj::Callable(ref fn_obj) = self.eval_expr(&call.callee)? {
-            let obj = self
-                .invoke(fn_obj, &call.args)?
-                .unwrap_or_else(|| LoxObj::nil());
-            Ok(obj)
-        } else {
-            Err(RuntimeError::MismatchedType)
+        match self.eval_expr(&call.callee)? {
+            LoxObj::Callable(ref fn_obj) => {
+                let obj = self
+                    .invoke(fn_obj, &call.args)?
+                    .unwrap_or_else(|| LoxObj::nil());
+                Ok(obj)
+            }
+            LoxObj::Class(ref class) => {
+                // we treat a class name as a constructor
+                let instance = LoxInstance::new(class);
+                // TODO: setup fields
+                Ok(LoxObj::Instance(instance))
+            }
+            _ => Err(RuntimeError::MismatchedType),
         }
     }
 
-    fn visit_prop_expr(&mut self, prop: &PropUseData) -> Result<LoxObj> {
-        let obj = self.eval_expr(&prop.body)?;
-        match obj {
+    fn visit_get_expr(&mut self, get: &GetUseData) -> Result<LoxObj> {
+        let body = self.eval_expr(&get.body)?;
+        match body {
             LoxObj::Instance(ref instance) => {
-                let prop = instance.get(&prop.name)?;
+                let got = instance.get(&get.name)?;
+                Ok(got)
             }
-            _ => return Err(RuntimeError::NotForScopeOperator),
+            _ => Err(RuntimeError::NotForDotOperator),
         }
-        Ok(obj)
+    }
+
+    // TODO: allow creating new field only in constructor
+    fn visit_set_expr(&mut self, set: &SetUseData) -> Result<LoxObj> {
+        let mut body = self.eval_expr(&set.body)?;
+        match body {
+            LoxObj::Instance(ref mut instance) => {
+                let obj = self.eval_expr(&set.value)?;
+                instance.set(&set.name, obj);
+                // TODO: is it ok to return nil
+                Ok(LoxObj::nil())
+            }
+            _ => Err(RuntimeError::NotForDotOperator),
+        }
     }
 }

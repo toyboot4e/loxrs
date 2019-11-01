@@ -31,7 +31,8 @@ impl PrettyPrint for Expr {
             Variable(ref var) => format!("{}", var.name),
             Assign(ref a) => a.pretty_print(),
             Call(ref call) => call.pretty_print(),
-            Prop(ref prop) => prop.pretty_print(),
+            Get(ref get) => get.pretty_print(),
+            Set(ref set) => set.pretty_print(),
         }
     }
 }
@@ -162,9 +163,20 @@ impl PrettyPrint for CallData {
     }
 }
 
-impl PrettyPrint for PropUseData {
+impl PrettyPrint for GetUseData {
     fn pretty_print(&self) -> String {
-        format!("(prop {} {})", self.name, self.body.pretty_print())
+        format!("(get {} {})", self.name, self.body.pretty_print())
+    }
+}
+
+impl PrettyPrint for SetUseData {
+    fn pretty_print(&self) -> String {
+        format!(
+            "(set {} {} {})",
+            self.body.pretty_print(),
+            self.name,
+            self.body.pretty_print()
+        )
     }
 }
 

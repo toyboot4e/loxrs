@@ -16,7 +16,8 @@ pub enum RuntimeError {
     // TODO: enable overwriting
     DuplicateDeclaration(String),
     WrongNumberOfArguments,
-    NotForScopeOperator,
+    NotForDotOperator,
     NoFieldWithName(String),
+    ReassignDisabled,
 }
 

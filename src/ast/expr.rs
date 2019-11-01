@@ -14,7 +14,10 @@ pub enum Expr {
     Variable(VarUseData),
     Assign(Box<AssignData>),
     Call(Box<CallData>),
-    Prop(Box<PropUseData>),
+    /// Solves a scope or field
+    Get(Box<GetUseData>),
+    // Similar to assignment, but the target is a field
+    Set(Box<SetUseData>),
 }
 
 /// Helpers for constructing / right recursive parsing
@@ -60,6 +63,10 @@ impl Expr {
             assigned: VarUseData::new(name, id),
             expr: expr,
         }))
+    }
+
+    pub fn set(body: Expr, name: &str, value: Expr) -> Expr {
+        Expr::Set(Box::new(SetUseData::new(body, name, value)))
     }
 
     pub fn call(callee: Expr, args: Option<Args>) -> Self {
@@ -272,6 +279,8 @@ impl VarUseData {
 }
 
 /// `=`,  only parsed as an expression statement.
+///
+/// It doesn't contain LHS object 'cause. Instead, it should be gotten from `Env`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct AssignData {
     pub assigned: VarUseData,
@@ -304,18 +313,34 @@ pub struct CallData {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct PropUseData {
+pub struct GetUseData {
     pub body: Expr,
     pub name: String,
-    pub id: VarUseId,
 }
 
-impl PropUseData {
-    pub fn new(body: Expr, name: String, id: VarUseId) -> Self {
+impl GetUseData {
+    pub fn new(body: Expr, name: String) -> Self {
         Self {
             body: body,
             name: name,
-            id: id,
+        }
+    }
+}
+
+/// It's similar to an assignment, but it tries to assign value to
+#[derive(Clone, Debug, PartialEq)]
+pub struct SetUseData {
+    pub body: Expr,
+    pub name: String,
+    pub value: Expr,
+}
+
+impl SetUseData {
+    pub fn new(body: Expr, name: impl Into<String>, value: Expr) -> Self {
+        Self {
+            body: body,
+            name: name.into(),
+            value: value,
         }
     }
 }

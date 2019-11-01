@@ -1,6 +1,8 @@
 use crate::ast::{expr::*, stmt::*, ExprVisitor, StmtVisitor};
 use ::std::collections::HashMap;
 
+// TODO: consider using macros to implement Resolver
+
 type Result<T> = ::std::result::Result<T, SemantcicError>;
 
 #[derive(Debug)]
@@ -15,9 +17,10 @@ pub enum SemantcicError {
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-pub enum FnType {
+pub enum LoxFnType {
     None,
     Fn,
+    Method,
 }
 
 type Scope = HashMap<String, bool>;
@@ -32,7 +35,7 @@ pub struct Resolver<'a> {
     /// Useful to detect recursive variable definition or duplicates.
     scopes: Vec<Scope>,
     /// State for function resolving.
-    current_fn_type: FnType,
+    current_fn_type: LoxFnType,
     /// Distances from a scope where each variable is in. Only tracks local variables (see 11.3.2
     /// for details)
     // TODO: isize vs usize
@@ -46,11 +49,12 @@ impl<'a> Resolver<'a> {
             // We don't track global definitions.
             // It begins with empty, while `Interpreter` begins with global scope.
             scopes: Vec::new(),
-            current_fn_type: FnType::None,
+            current_fn_type: LoxFnType::None,
             caches: caches,
         }
     }
 
+    /// Enables to map local variable to scope
     fn resolve_local_var(&mut self, var: &VarUseData) {
         if let Some(d) = self
             .scopes
@@ -123,7 +127,7 @@ impl<'a> Resolver<'a> {
         Ok(())
     }
 
-    pub fn resolve_fn_args_and_body(&mut self, f: &FnDeclArgs, type_: FnType) -> Result<()> {
+    pub fn resolve_fn_args_and_body(&mut self, f: &FnDeclArgs, type_: LoxFnType) -> Result<()> {
         // tracking state
         let enclosing = self.current_fn_type;
         self.current_fn_type = type_;
@@ -157,7 +161,7 @@ impl<'a> StmtVisitor<Result<()>> for Resolver<'a> {
     fn visit_fn_decl(&mut self, f: &FnDeclArgs) -> Result<()> {
         self.declare(&f.name)?;
         self.define(&f.name); // we allow recursive function declaration
-        self.resolve_fn_args_and_body(f, FnType::Fn)
+        self.resolve_fn_args_and_body(f, LoxFnType::Fn)
     }
 
     // the rest is just passing each stmt/expr to the resolving methods
@@ -180,7 +184,7 @@ impl<'a> StmtVisitor<Result<()>> for Resolver<'a> {
     }
 
     fn visit_return_stmt(&mut self, ret: &Return) -> Result<()> {
-        if self.current_fn_type == FnType::None {
+        if self.current_fn_type == LoxFnType::None {
             return Err(SemantcicError::ReturnFromNonFunction);
         }
         self.resolve_expr(&ret.expr)
@@ -199,6 +203,9 @@ impl<'a> StmtVisitor<Result<()>> for Resolver<'a> {
         // Lox permits to declare a class as a local variable
         self.declare(&c.name)?;
         self.define(&c.name);
+        for m in c.methods.iter() {
+            self.resolve_fn_args_and_body(m, LoxFnType::Method)?;
+        }
         Ok(())
     }
 }
@@ -254,7 +261,12 @@ impl<'a> ExprVisitor<Result<()>> for Resolver<'a> {
         Ok(()) // there's no variable mentioned
     }
 
-    fn visit_prop_expr(&mut self, prop: &PropUseData) -> Result<()> {
-        self.resolve_expr(&prop.body)
+    fn visit_get_expr(&mut self, get: &GetUseData) -> Result<()> {
+        self.resolve_expr(&get.body)
+    }
+
+    fn visit_set_expr(&mut self, set: &SetUseData) -> Result<()> {
+        self.resolve_expr(&set.body)?;
+        self.resolve_expr(&set.value)
     }
 }

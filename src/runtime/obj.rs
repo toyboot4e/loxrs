@@ -15,7 +15,8 @@ use ::std::rc::{Rc, Weak};
 pub enum LoxObj {
     Value(LoxValue),
     Callable(LoxFn),
-    Class(LoxClass),
+    // TODO: consider using Rc or not (to reference from instance)
+    Class(Rc<LoxClass>),
     Instance(LoxInstance),
 }
 
@@ -99,7 +100,7 @@ impl LoxObj {
     }
 }
 
-/// Runtime function object
+/// Runtime function object (expect class names as constructors)
 #[derive(Clone, Debug)]
 pub enum LoxFn {
     /// User defined function
@@ -111,7 +112,7 @@ pub enum LoxFn {
 }
 
 impl LoxFn {
-    pub fn user_from_decl(decl: &FnDeclArgs, closure: &Rc<RefCell<Env>>) -> Self {
+    pub fn from_decl(decl: &FnDeclArgs, closure: &Rc<RefCell<Env>>) -> Self {
         LoxFn::User(LoxUserFn::from_def(decl, closure))
     }
 }
@@ -140,7 +141,7 @@ impl LoxUserFn {
 #[derive(Clone, Debug)]
 pub struct LoxClass {
     pub name: String,
-    pub methods: Vec<LoxFn>,
+    pub methods: HashMap<String, LoxFn>,
 }
 
 impl LoxClass {
@@ -150,7 +151,7 @@ impl LoxClass {
             methods: decl
                 .methods
                 .iter()
-                .map(|m| LoxFn::user_from_decl(m, closure))
+                .map(|m| (m.name.to_owned(), LoxFn::from_decl(m, closure)))
                 .collect(),
         }
     }
@@ -164,17 +165,55 @@ pub struct LoxInstance {
     fields: HashMap<String, LoxObj>,
 }
 
+#[derive(Clone, Debug)]
+pub struct AssignHandle {
+    did_reassign: bool,
+}
+
 impl LoxInstance {
+    pub fn new(class: &Rc<LoxClass>) -> Self {
+        Self {
+            class: Rc::downgrade(class),
+            // TODO: initialize with fields
+            fields: HashMap::new(),
+        }
+    }
+
     // TODO: maybe enable immutable access
     pub fn get(&self, name: &str) -> Result<LoxObj> {
-        self.fields
-            .get(name)
-            .map(|obj| obj.clone())
-            .ok_or_else(|| RuntimeError::NoFieldWithName(name.to_string()))
+        if let Some(obj) = self.fields.get(name) {
+            Ok(obj.clone())
+        } else {
+            Err(RuntimeError::NoFieldWithName(name.to_string()))
+        }
+    }
+
+    pub fn set(&mut self, name: &str, value: LoxObj) {
+        self.fields.insert(name.to_owned(), value);
+    }
+
+    pub fn try_assign(&mut self, name: &str, value: LoxObj) -> Result<AssignHandle> {
+        if let Some(obj) = self.fields.get_mut(name) {
+            Err(RuntimeError::ReassignDisabled)
+        } else {
+            // FIXME: reduce cloning
+            Ok(AssignHandle {
+                did_reassign: self.fields.insert(name.to_owned(), value).is_some(),
+            })
+        }
+    }
+
+    pub fn try_reassign(&mut self, name: &str, value: LoxObj) -> Result<()> {
+        if let Some(obj) = self.fields.get_mut(name) {
+            *obj = value;
+            Ok(())
+        } else {
+            Err(RuntimeError::NoFieldWithName(name.to_owned()))
+        }
     }
 }
 
-// PrettyPrint
+// impl PrettyPrint
 
 impl PrettyPrint for LoxValue {
     fn pretty_print(&self) -> String {
@@ -227,7 +266,7 @@ impl PrettyPrint for LoxClass {
             &self.name,
             self.methods
                 .iter()
-                .map(|f| f.pretty_print())
+                .map(|(name, f)| format!("{}: {}", name, f.pretty_print()))
                 .collect::<Vec<_>>()
                 .join(", ")
         )
