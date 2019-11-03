@@ -36,6 +36,7 @@ pub enum Token {
     // keywords
     And,
     Class,
+    Self_,
     Else,
     False,
     Fn,
@@ -46,7 +47,6 @@ pub enum Token {
     Print,
     Return,
     Super,
-    This,
     True,
     Var,
     While,

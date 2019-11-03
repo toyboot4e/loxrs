@@ -15,7 +15,10 @@ pub enum RuntimeError {
     Undefined(String),
     // TODO: enable overwriting
     DuplicateDeclaration(String),
-
     WrongNumberOfArguments,
+    NotForDotOperator,
+    NoFieldWithName(String),
+    ReassignDisabled,
+    CantBind,
 }
 

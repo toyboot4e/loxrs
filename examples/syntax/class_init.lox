@@ -1,0 +1,16 @@
+class Vec2 {
+    fn init(x, y) {
+        @.x = x;
+        @.y = y;
+    }
+
+    fn add(another) {
+        // TODO: impl += -= *~ /=
+        return Vec2(@.x + another.x, @.y + another.y);
+    }
+}
+
+var x = Vec2(1, 2);
+var y = Vec2(3, 4);
+print x.add(y); // Vec2 { x: 4, y: 6 }
+

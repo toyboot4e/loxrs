@@ -4,34 +4,30 @@ Yet another hobby project to follow the book [Crafting Interpreters](http://www.
 
 I'm doing part II (treewalk interpreter). Now on: Ch.12 [Classes](https://craftinginterpreters.com/classes.html)
 
-## Examples
+## Example
 
-We can run lox program such as this:
+Do `cargo run -- <filename>` to run a program file.
 
 ```rust
-// prints 1 2 3 .. n
-fn count(n) {
-  if n <= 0 { return; }
-  if n > 1 { count(n - 1); }
-  print n;
+class Vec2 {
+    fn init(x, y) {
+        @.x = x;
+        @.y = y;
+    }
+
+    fn add(another) {
+        return Vec2(@.x + another.x, @.y + another.y);
+    }
 }
 
-count(3);
+var x = Vec2(1, 2);
+var y = Vec2(3, 4);
+print x.add(y);
 ```
 
-Do `cargo run -- <filename>` to run program.
-
-All text below are **in progress**.
-
-## Overview of the book
-
-To be written.
-
-- What will be implemented and what will be not? 
-- Part 2: tree-walk interpreter 
-    - Recursive descent parer 
-
 ## Notes on the implementation
+
+**Those text below are just for me at the moment**.
 
 ### Differences from the original Lox
 
@@ -39,6 +35,7 @@ To be written.
 - Change: `while` without parentheses 
 - Change: `return` is dealt as `Ok(Some(LoxObj))`, not as an exception 
 - Skipped: `for` statement (maybe make range-based one instead later) 
+- Skipped: forbidding to return something from a constructor 
 
 ### Rust specigic tips (for me)
 
@@ -54,19 +51,11 @@ To be written.
 - runtime (treewalk) 
     - using visitor pattern vs just `match` to AST 
 
-### Performance
-
-To be written.
-
-- Can we reduce the number of cloning? 
-    - with or without using references? 
-    - And is it really better for performance? 
-- When cloning is done in loxrs? 
-    - AST -> runtime object 
-        - when defining functions: clones all the statemenst in the block 
-
 ## TODO
 
 - part II 
 - challenges 
+- add `+=` etc. 
+- PrettyPrint with indent 
+- cache just for `VarUseId`, then resolve `@` 
 

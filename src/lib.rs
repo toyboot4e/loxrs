@@ -1,4 +1,4 @@
-//! loxrs is a Lox implementation in Rust.
+//! loxrs is an implementation of Lox in Rust.
 
 #![allow(dead_code)]
 #![allow(unused_variables)]
@@ -15,8 +15,9 @@ use crate::lexer::{parser::Parser, scanner::Scanner};
 use crate::runtime::Interpreter;
 
 use std::fs;
-use std::io::{self, BufRead, BufWriter, Write}; // flush()
+use std::io::{self, BufRead, BufWriter, Write};
 
+// TODO: buffering for reading source files
 pub fn run_file(path: &str) {
     let source = match fs::read_to_string(path) {
         Err(why) => {
@@ -54,12 +55,18 @@ pub fn run_file_debug(path: &str) {
     };
 
     let (tokens, scan_errors) = Scanner::new(&source).scan();
-    self::print_all_debug("====== scan errors =====", scan_errors);
-    self::print_all_debug("====== tokens =====", &tokens);
+    self::print_all_debug(&scan_errors, "====== scan errors =====");
+    self::print_all_debug(&tokens, "====== tokens =====");
 
     let (mut stmts, parse_errors) = Parser::new(&tokens).parse();
-    self::print_all_debug("===== parse errors =====", &parse_errors);
-    self::print_all_display("===== AST =====", stmts.iter().map(|s| s.pretty_print()));
+    self::print_all_debug(&parse_errors, "===== parse errors =====");
+    self::print_all_display(
+        stmts
+            .iter()
+            .enumerate()
+            .map(|(i, s)| format!("{} {}", i, s.pretty_print())),
+        "===== AST =====",
+    );
 
     let mut interpreter = Interpreter::new();
     {
@@ -73,20 +80,22 @@ pub fn run_file_debug(path: &str) {
     self::interpret(&mut stmts, &mut interpreter);
 }
 
-fn print_all_debug(description: &str, items: impl IntoIterator<Item = impl ::std::fmt::Debug>) {
+fn print_all_debug(items: impl IntoIterator<Item = impl ::std::fmt::Debug>, description: &str) {
     let out = io::stdout();
     let mut out = BufWriter::new(out.lock());
     writeln!(out, "{}", description).unwrap();
+
     for i in items {
         writeln!(out, "{:?}", i).unwrap();
     }
     writeln!(out).unwrap();
 }
 
-fn print_all_display(description: &str, items: impl IntoIterator<Item = impl ::std::fmt::Display>) {
+fn print_all_display(items: impl IntoIterator<Item = impl ::std::fmt::Display>, description: &str) {
     let out = io::stdout();
     let mut out = BufWriter::new(out.lock());
     writeln!(out, "{}", description).unwrap();
+
     for i in items {
         writeln!(out, "{}", i).unwrap();
     }
@@ -122,18 +131,11 @@ pub fn run_repl() {
 
 pub fn interpret(stmts: &mut [Stmt], interpreter: &mut Interpreter) {
     println!("====== interpretations =====");
-    match stmts
-        .iter()
-        .enumerate()
-        .map(|(i, stmt)| (i, interpreter.interpret(stmt)))
-        .find(|(i, result)| result.is_err())
-    {
-        Some((i, err)) => {
+    for (i, stmt) in stmts.iter().enumerate() {
+        if let Err(why) = interpreter.interpret(stmt) {
             println!("\n====== runtime errors =====");
-            println!("at {}, {:?}", i, err);
-        }
-        None => {
-            //
+            println!("at {}, {:?}", i, why);
+            return;
         }
     }
 }
