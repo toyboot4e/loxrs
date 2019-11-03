@@ -11,3 +11,5 @@ class TestClass {
 print TestClass();
 TestClass().test_fn();
 
+print @; // error
+

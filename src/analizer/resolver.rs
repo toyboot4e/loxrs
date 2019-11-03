@@ -14,6 +14,7 @@ pub enum SemantcicError {
     // TODO: better context (consider assining to tuple with pattern match)
     RecursiveVariableDeclaration(String),
     ReturnFromNonFunction,
+    UseOfSelfOutsideMethod,
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -21,6 +22,12 @@ pub enum LoxFnType {
     None,
     Fn,
     Method,
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum ClassType {
+    Class,
+    None,
 }
 
 type Scope = HashMap<String, bool>;
@@ -37,6 +44,8 @@ pub struct Resolver<'a> {
     scopes: Vec<Scope>,
     /// State for function resolving.
     current_fn_type: LoxFnType,
+    /// Tracks either in the class or not
+    current_class_type: ClassType,
     /// Distances from a scope where each variable is in. Only tracks local variables (see 11.3.2
     /// for details)
     // TODO: isize vs usize
@@ -50,6 +59,7 @@ impl<'a> Resolver<'a> {
             // We don't track global definitions.
             scopes: Vec::new(),
             current_fn_type: LoxFnType::None,
+            current_class_type: ClassType::None,
             caches: caches,
         }
     }
@@ -219,6 +229,8 @@ impl<'a> StmtVisitor<Result<()>> for Resolver<'a> {
     }
 
     fn visit_class_decl(&mut self, class: &ClassDeclArgs) -> Result<()> {
+        let enclosing = self.current_class_type;
+        self.current_class_type = ClassType::Class;
         // Lox permits to declare a class as a local variable
         self.declare(&class.name)?;
         self.define(&class.name);
@@ -232,6 +244,7 @@ impl<'a> StmtVisitor<Result<()>> for Resolver<'a> {
             self.resolve_fn_after(enclosing);
             result?;
         }
+        self.current_class_type = enclosing;
         Ok(())
     }
 }
@@ -295,7 +308,11 @@ impl<'a> ExprVisitor<Result<()>> for Resolver<'a> {
     }
 
     fn visit_self_expr(&mut self, self_: &SelfData) -> Result<()> {
-        // self.resolve_local_var(
+        // TODO: cache to VarUseId and resolve @ here (for performance)
+        // self.caches.insert("@", 0);
+        if self.current_class_type != ClassType::Class {
+            return Err(SemantcicError::UseOfSelfOutsideMethod);
+        }
         Ok(())
     }
 }
