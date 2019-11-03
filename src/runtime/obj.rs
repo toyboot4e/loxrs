@@ -102,6 +102,8 @@ impl LoxObj {
 
 // TODO: remove native functions
 /// Runtime function object (expect class names as constructors)
+///
+/// It's not so expensive to copy a `LoxFn`
 #[derive(Clone, Debug)]
 pub enum LoxFn {
     /// User defined function
@@ -184,7 +186,7 @@ impl LoxClass {
 #[derive(Clone, Debug)]
 pub struct LoxInstance {
     // FIXME: use indirect access to a class
-    class: Rc<LoxClass>,
+    pub class: Rc<LoxClass>,
     fields: HashMap<String, LoxObj>,
 }
 
@@ -202,6 +204,7 @@ impl LoxInstance {
         }
     }
 
+    /// Borrows self
     pub fn get(self_: &Rc<RefCell<LoxInstance>>, name: &str) -> Result<LoxObj> {
         // variable > method
         if let Some(obj) = self_.borrow().fields.get(name) {
@@ -264,6 +267,7 @@ impl PrettyPrint for LoxObj {
             LoxObj::Value(value) => value.pretty_print(),
             LoxObj::Callable(call) => call.pretty_print(),
             LoxObj::Class(class) => class.pretty_print(),
+            // TODO: test if it will get panic
             LoxObj::Instance(instance) => instance.borrow().pretty_print(),
         }
     }
@@ -312,4 +316,3 @@ impl PrettyPrint for LoxInstance {
         )
     }
 }
-

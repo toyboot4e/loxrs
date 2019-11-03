@@ -404,7 +404,20 @@ impl ExprVisitor<Result<LoxObj>> for Interpreter {
             // we treat a class name as a constructor
             LoxObj::Class(ref class) => {
                 let instance = LoxInstance::new(class);
-                Ok(LoxObj::Instance(Rc::new(RefCell::new(instance))))
+                let instance = Rc::new(RefCell::new(instance));
+                // BE CAREFUL NOT TO BORROW TOO LONG!
+                // if let Some(initializer) = instance.borrow().class.find_method("init") {
+                let initializer = instance.borrow().class.find_method("init");
+                if initializer.is_some() {
+                    let initializer = initializer.unwrap();
+                    match initializer {
+                        LoxFn::User(initializer) => {
+                            self.invoke_user_fn(&initializer.bind(&instance)?, &call.args)?;
+                        }
+                        _ => panic!(),
+                    }
+                }
+                Ok(LoxObj::Instance(instance))
             }
             _ => Err(RuntimeError::MismatchedType),
         }
@@ -420,10 +433,11 @@ impl ExprVisitor<Result<LoxObj>> for Interpreter {
 
     // TODO: allow creating new field only in constructor
     fn visit_set_expr(&mut self, set: &SetUseData) -> Result<LoxObj> {
-        let mut body = self.eval_expr(&set.body)?;
+        let body = self.eval_expr(&set.body)?;
         match body {
-            LoxObj::Instance(ref mut instance) => {
+            LoxObj::Instance(instance) => {
                 let obj = self.eval_expr(&set.value)?;
+                instance.borrow_mut();
                 instance.borrow_mut().set(&set.name, obj);
                 // TODO: is it ok to return nil
                 Ok(LoxObj::nil())
