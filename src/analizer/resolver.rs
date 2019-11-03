@@ -24,6 +24,7 @@ pub enum LoxFnType {
 }
 
 type Scope = HashMap<String, bool>;
+// TODO: map id
 type Caches = HashMap<VarUseData, usize>;
 
 /// Tracks objects in local scope, analizes them and provides a way to map each variable usage
@@ -47,14 +48,13 @@ impl<'a> Resolver<'a> {
     pub fn new(caches: &'a mut Caches) -> Self {
         Self {
             // We don't track global definitions.
-            // It begins with empty, while `Interpreter` begins with global scope.
             scopes: Vec::new(),
             current_fn_type: LoxFnType::None,
             caches: caches,
         }
     }
 
-    /// Enables to map local variable to scope
+    /// Enables to map a local variable to a scope providing the distance to it
     fn resolve_local_var(&mut self, var: &VarUseData) {
         if let Some(d) = self
             .scopes
@@ -113,6 +113,7 @@ impl<'a> Resolver<'a> {
         self.visit_expr(expr)
     }
 
+    /// Resolves statements in a inner scope
     fn resolve_block(&mut self, stmts: &[Stmt]) -> Result<()> {
         self.begin_scope();
         let result = self.resolve_stmts(stmts);
@@ -120,6 +121,7 @@ impl<'a> Resolver<'a> {
         result
     }
 
+    /// Just resolves statements
     pub fn resolve_stmts(&mut self, stmts: &[Stmt]) -> Result<()> {
         for stmt in stmts {
             self.resolve_stmt(stmt)?;
@@ -127,20 +129,21 @@ impl<'a> Resolver<'a> {
         Ok(())
     }
 
-    pub fn resolve_fn_args_and_body(&mut self, f: &FnDeclArgs, type_: LoxFnType) -> Result<()> {
+    pub fn resolve_fn(&mut self, f: &FnDeclArgs, fn_type: LoxFnType) -> Result<()> {
         // tracking state
         let enclosing = self.current_fn_type;
-        self.current_fn_type = type_;
-        // impl
+        self.current_fn_type = fn_type;
+
         self.begin_scope();
-        let result = self.impl_resolve_fn_args_and_body(f);
+        let result = self.impl_resolve_fn(f);
         self.end_scope();
 
         self.current_fn_type = enclosing;
         result
     }
 
-    fn impl_resolve_fn_args_and_body(&mut self, f: &FnDeclArgs) -> Result<()> {
+    /// Resolves function arguments and the body
+    fn impl_resolve_fn(&mut self, f: &FnDeclArgs) -> Result<()> {
         if let Some(ref params) = f.params {
             for param in params {
                 self.declare(param)?;
@@ -153,15 +156,16 @@ impl<'a> Resolver<'a> {
 
 impl<'a> StmtVisitor<Result<()>> for Resolver<'a> {
     fn visit_var_decl(&mut self, var: &VarDeclArgs) -> Result<()> {
-        self.declare(&var.name)?; // we forbid recursive variable declaration
-        self.define(&var.name); // now it's initialized
+        self.declare(&var.name)?;
+        self.resolve_expr(&var.init)?; // we don't allow to recursively referring to itself
+        self.define(&var.name);
         Ok(())
     }
 
     fn visit_fn_decl(&mut self, f: &FnDeclArgs) -> Result<()> {
         self.declare(&f.name)?;
-        self.define(&f.name); // we allow recursive function declaration
-        self.resolve_fn_args_and_body(f, LoxFnType::Fn)
+        self.define(&f.name); // we allow to recursively referring to itself
+        self.resolve_fn(f, LoxFnType::Fn)
     }
 
     // the rest is just passing each stmt/expr to the resolving methods
@@ -173,8 +177,8 @@ impl<'a> StmtVisitor<Result<()>> for Resolver<'a> {
     fn visit_if_stmt(&mut self, if_: &IfArgs) -> Result<()> {
         self.resolve_expr(&if_.condition)?;
         self.resolve_stmt(&if_.if_true)?;
-        if let Some(ref else_branch) = if_.if_false {
-            self.resolve_stmt(else_branch)?;
+        if let Some(ref if_false) = if_.if_false {
+            self.resolve_stmt(if_false)?;
         }
         Ok(())
     }
@@ -204,7 +208,7 @@ impl<'a> StmtVisitor<Result<()>> for Resolver<'a> {
         self.declare(&c.name)?;
         self.define(&c.name);
         for m in c.methods.iter() {
-            self.resolve_fn_args_and_body(m, LoxFnType::Method)?;
+            self.resolve_fn(m, LoxFnType::Method)?;
         }
         Ok(())
     }
@@ -212,10 +216,10 @@ impl<'a> StmtVisitor<Result<()>> for Resolver<'a> {
 
 impl<'a> ExprVisitor<Result<()>> for Resolver<'a> {
     fn visit_var_expr(&mut self, var: &VarUseData) -> Result<()> {
-        // we forbid duplicate variable declaration
+        // we forbid recursive variable declaration
         if let Some(scope) = self.scopes.last() {
             if scope.get(&var.name) == Some(&false) {
-                // declared but undefined
+                // cannot read variable in its own initializer
                 return Err(SemantcicError::RecursiveVariableDeclaration(
                     var.name.to_string(),
                 ));

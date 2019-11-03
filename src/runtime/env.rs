@@ -77,7 +77,7 @@ impl Env {
             self.get(name)
         } else {
             match self.ancestor(d).borrow().map.borrow().get(name) {
-                Some(name) => Ok(name.clone()),
+                Some(obj) => Ok(obj.clone()),
                 _ => Err(RuntimeError::Undefined(name.to_string())),
             }
         }
@@ -93,12 +93,11 @@ impl Env {
 
     /// Looks up an enclosing environment in a distance, trusting the length > 0.
     fn ancestor(&self, d: usize) -> Rc<RefCell<Env>> {
-        (0..d)
-            .scan(self.parent.upgrade().unwrap(), |env, _| {
-                Some(env.borrow().parent.upgrade().unwrap())
-            })
-            .last()
-            .unwrap()
-            .clone()
+        let mut env = self.parent.upgrade().unwrap();
+        for _ in 0..(d - 1) {
+            let next = env.borrow().parent.upgrade().unwrap();
+            env = next;
+        }
+        env
     }
 }
