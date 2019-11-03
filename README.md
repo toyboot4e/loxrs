@@ -2,11 +2,11 @@
 
 Yet another hobby project to follow the book [Crafting Interpreters](http://www.craftinginterpreters.com/) in Rust.
 
-I'm doing part II (treewalk interpreter). Now on: Ch.12 [Classes](https://craftinginterpreters.com/classes.html)
+I'm doing part II (treewalk interpreter). Done: Ch.12 [Classes](https://craftinginterpreters.com/classes.html)
 
 ## Example
 
-Do `cargo run -- <filename>` to run a program file.
+Do `cargo run -- <filename>` to run a program.
 
 ```rust
 class Vec2 {
