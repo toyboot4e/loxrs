@@ -1,9 +1,13 @@
-//! Object (value, variable or function) definitions
+//! Runtime representations of objects, separated from AST
 
-use crate::ast::expr::*;
-use crate::ast::stmt::{FnDef, Params, Stmt};
-use crate::runtime::env::Env;
+use crate::ast::{
+    expr::*,
+    pretty_printer::{self, PrettyPrint},
+    stmt::{ClassDeclArgs, FnDeclArgs, Params, Stmt},
+};
+use crate::runtime::{env::Env, Result, RuntimeError};
 use ::std::cell::RefCell;
+use ::std::collections::HashMap;
 use ::std::rc::Rc;
 
 /// Runtime object which represents anything
@@ -11,6 +15,9 @@ use ::std::rc::Rc;
 pub enum LoxObj {
     Value(LoxValue),
     Callable(LoxFn),
+    // TODO: consider using Rc or not (to reference from instance)
+    Class(Rc<LoxClass>),
+    Instance(Rc<RefCell<LoxInstance>>),
 }
 
 impl LoxObj {
@@ -18,7 +25,7 @@ impl LoxObj {
         LoxObj::Value(LoxValue::Nil)
     }
 
-    pub fn f(def: &FnDef, closure: &Rc<RefCell<Env>>) -> Self {
+    pub fn f(def: &FnDeclArgs, closure: &Rc<RefCell<Env>>) -> Self {
         LoxObj::Callable(LoxFn::User(LoxUserFn::from_def(def, closure)))
     }
 }
@@ -93,7 +100,10 @@ impl LoxObj {
     }
 }
 
-/// Runtime function object
+// TODO: remove native functions
+/// Runtime function object (expect class names as constructors)
+///
+/// It's not so expensive to copy a `LoxFn`
 #[derive(Clone, Debug)]
 pub enum LoxFn {
     /// User defined function
@@ -104,22 +114,205 @@ pub enum LoxFn {
     // Native(String, Option<Args>),
 }
 
-/// Runtime user-defined function
+impl LoxFn {
+    pub fn from_decl(decl: &FnDeclArgs, closure: &Rc<RefCell<Env>>) -> Self {
+        LoxFn::User(LoxUserFn::from_def(decl, closure))
+    }
+
+    pub fn bind(&self, instance: &Rc<RefCell<LoxInstance>>) -> Result<Self> {
+        match self {
+            LoxFn::User(f) => Ok(LoxFn::User(f.bind(instance)?)),
+            _ => Err(RuntimeError::CantBind),
+        }
+    }
+}
+
+/// Runtime representaiton of a user-defined function.
 #[derive(Clone, Debug)]
 pub struct LoxUserFn {
-    pub body: Vec<Stmt>,
-    pub params: Option<Params>,
+    /// `Rc` for slicing the body to instance methods
+    pub body: Rc<Vec<Stmt>>,
+    pub params: Params,
     // TODO: disable mutation
     pub closure: Rc<RefCell<Env>>,
+    // TODO: should have name in field or not
 }
 
 impl LoxUserFn {
-    pub fn from_def(def: &FnDef, closure: &Rc<RefCell<Env>>) -> Self {
-        let env = Env::from_parent(&closure);
+    pub fn from_def(decl: &FnDeclArgs, closure: &Rc<RefCell<Env>>) -> Self {
         Self {
-            body: def.body.stmts.clone(),
-            params: def.params.clone(),
+            body: Rc::clone(&decl.body),
+            params: decl.params.clone(),
             closure: Rc::clone(closure),
         }
+    }
+
+    pub fn bind(&self, instance: &Rc<RefCell<LoxInstance>>) -> Result<LoxUserFn> {
+        let mut env = Env::from_parent(&self.closure);
+        env.define("@", LoxObj::Instance(Rc::clone(instance)))?;
+        Ok(LoxUserFn {
+            body: Rc::clone(&self.body),
+            params: self.params.clone(),
+            closure: Rc::new(RefCell::new(env)),
+        })
+    }
+}
+
+/// Runtime representation of a class
+#[derive(Clone, Debug)]
+pub struct LoxClass {
+    pub name: String,
+    pub methods: HashMap<String, LoxFn>,
+}
+
+impl LoxClass {
+    pub fn from_decl(decl: &ClassDeclArgs, closure: &Rc<RefCell<Env>>) -> Self {
+        Self {
+            name: decl.name.clone(),
+            methods: decl
+                .methods
+                .iter()
+                .map(|m| (m.name.to_owned(), LoxFn::from_decl(m, closure)))
+                .collect(),
+        }
+    }
+
+    pub fn find_method(&self, name: &str) -> Option<LoxFn> {
+        self.methods.get(name).map(|m| m.clone())
+    }
+}
+
+/// Runtime representation of an instance of a `LoxClass`
+#[derive(Clone, Debug)]
+pub struct LoxInstance {
+    // FIXME: use indirect access to a class
+    pub class: Rc<LoxClass>,
+    fields: HashMap<String, LoxObj>,
+}
+
+#[derive(Clone, Debug)]
+pub struct AssignHandle {
+    did_reassign: bool,
+}
+
+impl LoxInstance {
+    pub fn new(class: &Rc<LoxClass>) -> Self {
+        Self {
+            class: Rc::clone(class),
+            // TODO: initialize with fields
+            fields: HashMap::new(),
+        }
+    }
+
+    /// Borrows self
+    pub fn get(self_: &Rc<RefCell<LoxInstance>>, name: &str) -> Result<LoxObj> {
+        // variable > method
+        if let Some(obj) = self_.borrow().fields.get(name) {
+            Ok(obj.clone())
+        } else if let Some(method) = self_.borrow().class.find_method(name) {
+            let binded = method.bind(self_)?;
+            Ok(LoxObj::Callable(binded))
+        } else {
+            Err(RuntimeError::NoFieldWithName(name.to_string()))
+        }
+    }
+
+    pub fn set(&mut self, name: &str, value: LoxObj) {
+        self.fields.insert(name.to_owned(), value);
+    }
+
+    pub fn try_assign(&mut self, name: &str, value: LoxObj) -> Result<AssignHandle> {
+        if let Some(obj) = self.fields.get_mut(name) {
+            Err(RuntimeError::ReassignDisabled)
+        } else {
+            // FIXME: reduce cloning
+            Ok(AssignHandle {
+                did_reassign: self.fields.insert(name.to_owned(), value).is_some(),
+            })
+        }
+    }
+
+    pub fn try_reassign(&mut self, name: &str, value: LoxObj) -> Result<()> {
+        if let Some(obj) = self.fields.get_mut(name) {
+            *obj = value;
+            Ok(())
+        } else {
+            Err(RuntimeError::NoFieldWithName(name.to_owned()))
+        }
+    }
+}
+
+// impl PrettyPrint
+
+impl PrettyPrint for LoxValue {
+    fn pretty_print(&self) -> String {
+        match *self {
+            LoxValue::Nil => "Nil".into(),
+            LoxValue::Bool(b) => {
+                if b {
+                    "true".into()
+                } else {
+                    "false".into()
+                }
+            }
+            LoxValue::StringLit(ref s) => format!("\"{}\"", s.clone()),
+            LoxValue::Number(n) => n.to_string(),
+        }
+    }
+}
+
+impl PrettyPrint for LoxObj {
+    fn pretty_print(&self) -> String {
+        match self {
+            LoxObj::Value(value) => value.pretty_print(),
+            LoxObj::Callable(call) => call.pretty_print(),
+            LoxObj::Class(class) => class.pretty_print(),
+            // TODO: test if it will get panic
+            LoxObj::Instance(instance) => instance.borrow().pretty_print(),
+        }
+    }
+}
+
+impl PrettyPrint for LoxFn {
+    fn pretty_print(&self) -> String {
+        match self {
+            LoxFn::Clock => "(fn clock)".into(),
+            LoxFn::User(ref user) => user.pretty_print(),
+        }
+    }
+}
+
+impl PrettyPrint for LoxUserFn {
+    fn pretty_print(&self) -> String {
+        pretty_printer::pretty_fn("runtime-fn", &self.params, &self.body)
+    }
+}
+
+// TODO: more efficient string generation
+impl PrettyPrint for LoxClass {
+    fn pretty_print(&self) -> String {
+        format!(
+            "(class {} ({}))",
+            &self.name,
+            self.methods
+                .iter()
+                .map(|(name, f)| format!("{}: {}", name, f.pretty_print()))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
+}
+
+impl PrettyPrint for LoxInstance {
+    fn pretty_print(&self) -> String {
+        format!(
+            "(instance {} ({}))",
+            self.class.pretty_print(),
+            self.fields
+                .iter()
+                .map(|(key, value)| format!("({} {})", key, value.pretty_print()))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
     }
 }

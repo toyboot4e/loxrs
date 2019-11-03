@@ -1,7 +1,8 @@
-use crate::ast::stmt::{FnDef, Params};
+use crate::ast::stmt::{FnDeclArgs, Params};
 use crate::ast::{expr::*, stmt::*};
 use crate::lexer::token::*;
-use std::iter::Peekable;
+use ::std::iter::Peekable;
+use ::std::rc::Rc;
 
 type Result<T> = std::result::Result<T, ParseError>;
 
@@ -220,6 +221,25 @@ where
         return (stmts, errors);
     }
 
+    fn parse_block(&mut self) -> Result<Vec<Stmt>> {
+        let mut stmts = Vec::new();
+        loop {
+            match self.try_peek()?.token {
+                Token::RightBrace => {
+                    self.advance();
+                    break;
+                }
+                _ => {
+                    let stmt = self
+                        .decl()
+                        .unwrap_or_else(|| Err(ParseError::UnexpectedEof))?;
+                    stmts.push(stmt);
+                }
+            };
+        }
+        Ok(stmts)
+    }
+
     /// Enters "panic mode" and tries to go to next statement.
     ///
     /// It goes to a next semicolon.
@@ -235,11 +255,15 @@ where
         }
     }
 
-    /// decl → declFn | declVar | stmt ;
+    /// decl → declClass | declFn | declVar | stmt ;
     ///
     /// The root of parsing.
     fn decl(&mut self) -> Option<Result<Stmt>> {
         Some(match self.peek()?.token {
+            Token::Class => {
+                self.advance();
+                self.decl_class().map(|c| Stmt::Class(c))
+            }
             Token::Fn => {
                 self.advance();
                 self.decl_fn().map(|f| Stmt::Fn(f))
@@ -252,23 +276,35 @@ where
         })
     }
 
+    /// declClass  → "class" IDENTIFIER "{" function* "}" ;
+    fn decl_class(&mut self) -> Result<ClassDeclArgs> {
+        let name = self.try_consume_identifier()?;
+        self.try_consume(&Token::LeftBrace)?;
+        let mut methods = Vec::new();
+        while self.consume(&Token::Fn).is_some() {
+            let method = self.decl_fn()?;
+            methods.push(method);
+        }
+        self.try_consume(&Token::RightBrace)?;
+        Ok(ClassDeclArgs::new(name, methods))
+    }
+
     /// declFn  → "fn" IDENTIFIER "(" params? ")" block ;
-    fn decl_fn(&mut self) -> Result<FnDef> {
+    fn decl_fn(&mut self) -> Result<FnDeclArgs> {
         let name = self.try_consume_identifier()?;
 
         self.try_consume(&Token::LeftParen)?;
         let params = match self.try_peek()?.token {
-            // TODO: reduce reproducing the token
-            Token::Identifier(_) => Some(self.params()?),
-            _ => None,
+            Token::RightParen => Vec::new(),
+            _ => self.params()?,
         };
         self.try_consume(&Token::RightParen)?;
 
         // we must first consume `{` to parse a block
         self.try_consume(&Token::LeftBrace)?;
-        let body = self.stmt_block()?;
+        let body = self.parse_block()?;
 
-        Ok(FnDef::new(name, body, params))
+        Ok(FnDeclArgs::new(name, Rc::new(body), params))
     }
 
     /// params → IDENTIFIER ( "," IDENTIFIER )* ;
@@ -342,35 +378,28 @@ where
     ///
     /// Left brace `{` must be consumed before calling this.
     pub fn stmt_block(&mut self) -> Result<BlockArgs> {
-        let mut stmts = Vec::new();
-        loop {
-            match self.try_peek()?.token {
-                Token::RightBrace => {
-                    self.advance();
-                    break;
-                }
-                _ => {
-                    let stmt = self
-                        .decl()
-                        .unwrap_or_else(|| Err(ParseError::UnexpectedEof))?;
-                    stmts.push(stmt);
-                }
-            };
-        }
-        Ok(BlockArgs { stmts: stmts })
+        Ok(BlockArgs {
+            stmts: self.parse_block()?,
+        })
     }
 
     /// if → "if" expr block elseRecursive
     pub fn stmt_if(&mut self) -> Result<Stmt> {
+        // TODO: no overhead
+        let if_ = self.parse_if()?;
+        Ok(Stmt::If(Box::new(if_)))
+    }
+
+    fn parse_if(&mut self) -> Result<IfArgs> {
         let condition = self.expr()?;
         self.try_consume(&Token::LeftBrace)?;
-        let if_true = self.stmt_block()?.into_stmt();
+        let if_true = self.stmt_block()?;
         let if_false = self._else_recursive()?;
-        Ok(Stmt::if_then_else(condition, if_true, if_false))
+        Ok(IfArgs::new(condition, if_true, if_false))
     }
 
     /// elseRecursive → ("else" "if" block)* ("else" block)?
-    fn _else_recursive(&mut self) -> Result<Option<Stmt>> {
+    fn _else_recursive(&mut self) -> Result<Option<ElseBranch>> {
         if self.consume(&Token::Else).is_none() {
             return Ok(None);
         }
@@ -379,14 +408,15 @@ where
             // else if
             Token::If => {
                 self.advance();
-                let else_if = self.stmt_if()?;
-                Ok(Some(else_if))
+                let else_if = self.parse_if()?;
+                Ok(Some(ElseBranch::else_if(else_if)))
             }
             // else
             Token::LeftBrace => {
                 self.advance();
-                let else_ = self.stmt_block()?.into_stmt();
-                Ok(Some(else_))
+                let else_ = self.parse_block()?;
+                // TODO: no overhead with new type pattern
+                Ok(Some(ElseBranch::JustElse(BlockArgs { stmts: else_ })))
             }
             // error
             _ => Err(ParseError::unexpected(
@@ -477,30 +507,37 @@ where
 
     /// expr → assignment
     pub fn expr(&mut self) -> Result<Expr> {
-        self.assignment()
+        self.expr_assign()
     }
 
-    /// assignment → IDENTIFIER "=" assignment
-    ///            | logic_or ;
-    fn assignment(&mut self) -> Result<Expr> {
-        let expr = self.expr_or()?; // may be an identifier
+    /// assignment → ( call "." )? IDENTIFIER "=" assignment
+    ///            | logic_or;
+    fn expr_assign(&mut self) -> Result<Expr> {
+        let lhs = self.expr_or()?;
 
         // peek to see if it's an assignment
-        match self.try_peek()?.token {
-            Token::Equal => {}
-            _ => {
-                return Ok(expr);
-            }
+        if self.consume(&Token::Equal).is_none() {
+            return Ok(lhs);
         };
 
-        // previous `Expr` must be assignable (`Expr::Variable`)
-        let name = match expr {
-            Expr::Variable(ref var) => &var.name,
-            e => return Err(ParseError::NotAssignable(e)),
+        match lhs {
+            // assign
+            Expr::Variable(ref var) => {
+                let rhs = self.expr_assign()?;
+                return Ok(Expr::assign(&var.name, rhs, self.counter.next()));
+            }
+            // set (assign to get expression)
+            Expr::Get(get) => {
+                // e.g. x.y.z = 3;  // x, y are Expr::Get, z is Expr::Set
+                let name = get.name.clone();
+                let rhs = self.expr_assign()?;
+                return Ok(Expr::set(get.body, &name, rhs));
+            }
+            // error
+            _ => {
+                return Err(ParseError::NotAssignable(lhs));
+            }
         };
-        self.advance(); // =
-        let right = self.assignment()?;
-        Ok(Expr::assign(name, right, self.counter.next()))
     }
 
     /// logic_or → logicAnd ("||" logicAnd)*
@@ -541,7 +578,7 @@ where
         self.rrp(&Self::expr_unary, &[Slash, Star], &Expr::binary)
     }
 
-    /// unary → ( "!" | "-" ) unary | primary | call ;
+    /// unary → ( "!" | "-" ) unary | call ;
     fn expr_unary(&mut self) -> Result<Expr> {
         use Token::*;
         match self.try_peek()?.token {
@@ -557,29 +594,37 @@ where
         }
     }
 
-    /// call → primary invoke* ;
-    ///
-    /// invoke → "(" args ")" ;
-    /// args → expr ( "," expr )* ;
+    /// call → primary (invoke|prop)* ;
     fn expr_call(&mut self) -> Result<Expr> {
         let mut expr = self.expr_prim()?;
-        if self.try_peek()?.token != Token::LeftParen {
-            return Ok(expr); // prim
-        }
 
         // TODO: use right recursive parsing
-        // invoke*
-        while self.consume(&Token::LeftParen).is_some() {
-            let args = if self.try_peek()?.token == Token::RightParen {
-                None
-            } else {
-                Some(self.expr_call_args()?)
-            };
-            self.try_consume(&Token::RightParen)?;
-            expr = Expr::call(expr, args);
-        }
+        loop {
+            match self.try_peek()?.token {
+                Token::LeftParen => {
+                    // invoke → "(" args ")"
+                    self.advance();
+                    let args = if self.try_peek()?.token == Token::RightParen {
+                        self.advance();
+                        Vec::new()
+                    } else {
+                        let args = self.expr_call_args()?;
+                        args
+                    };
+                    expr = Expr::call(expr, args);
+                }
 
-        Ok(expr)
+                Token::Dot => {
+                    self.advance();
+                    let name = self.try_consume_identifier()?;
+                    expr = Expr::get(expr, &name);
+                }
+
+                _ => {
+                    return Ok(expr);
+                }
+            }
+        }
     }
 
     /// args → expr ( "," expr )* ;
@@ -590,9 +635,11 @@ where
         loop {
             match self.try_peek()? {
                 s_token if s_token.token == Token::Comma => {
+                    self.advance();
                     args.push(self.expr()?);
                 }
                 s_token if s_token.token == Token::RightParen => {
+                    self.advance();
                     return Ok(args);
                 }
                 s_token => {
@@ -605,7 +652,7 @@ where
         }
     }
 
-    /// primary → literal | group |indentifier ;
+    /// primary → literal | group | indentifier | self ;
     ///
     /// literal → number | string | "false" | "true" | "nil" ;
     /// group   → "(" expression ")" ;
@@ -615,14 +662,15 @@ where
         // TODO: refactor
         let mut var = {
             let s_token = self.try_next()?;
-            if let Some(literal) = LiteralData::from_token(&s_token.token) {
-                return Ok(literal.into());
-            }
             use Token::*;
             let name = match s_token.token {
-                LeftParen => return self.expr_group(),
                 Identifier(ref name) => name,
+                LeftParen => return self.expr_group(),
+                Self_ => return Ok(Expr::Self_(SelfData {})),
                 _ => {
+                    if let Some(literal) = LiteralData::from_token(&s_token.token) {
+                        return Ok(literal.into());
+                    }
                     return Err(ParseError::unexpected(
                         s_token,
                         // TODO: abstract token for literals

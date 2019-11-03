@@ -1,38 +1,24 @@
 use crate::ast::expr::Expr;
+use ::std::rc::Rc;
 
 // TODO: use proper places for function definitions
 pub type Params = Vec<String>;
-
-/// Function definition translated to AST
-#[derive(Clone, Debug, PartialEq)]
-pub struct FnDef {
-    pub name: String,
-    pub body: BlockArgs,        // Vec
-    pub params: Option<Params>, // Vec
-}
-
-impl FnDef {
-    pub fn new(name: String, body: BlockArgs, params: Option<Params>) -> Self {
-        Self {
-            name: name,
-            body: body,
-            params: params,
-        }
-    }
-}
+pub type FnBody = Rc<Vec<Stmt>>;
 
 /// Stmt → expr | if | print | block ;
 #[derive(Clone, Debug, PartialEq)]
 pub enum Stmt {
     /// Just evaluate the expression
     Expr(Expr),
-    Fn(FnDef),
+    Fn(FnDeclArgs),
     Print(PrintArgs),
     Var(VarDeclArgs),
     If(Box<IfArgs>),
     Return(Return),
     While(WhileArgs),
+    /// A non-negeric separated code block, not a body of a function
     Block(BlockArgs),
+    Class(ClassDeclArgs),
 }
 
 impl Stmt {
@@ -48,7 +34,7 @@ impl Stmt {
         Stmt::Var(VarDeclArgs::new(name, init))
     }
 
-    pub fn if_then_else(condition: Expr, then: Stmt, else_: Option<Stmt>) -> Self {
+    pub fn if_then_else(condition: Expr, then: BlockArgs, else_: Option<ElseBranch>) -> Self {
         Stmt::If(Box::new(IfArgs {
             condition: condition,
             if_true: then,
@@ -103,9 +89,31 @@ pub struct IfArgs {
     pub condition: Expr,
     // branches
     /// True branch
-    pub if_true: Stmt,
+    pub if_true: BlockArgs,
     /// Else branch. If it's `if`, the branch means `if else`.
-    pub if_false: Option<Stmt>,
+    pub if_false: Option<ElseBranch>,
+}
+
+impl IfArgs {
+    pub fn new(cond: Expr, if_true: BlockArgs, if_false: Option<ElseBranch>) -> Self {
+        Self {
+            condition: cond,
+            if_true: if_true,
+            if_false: if_false,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum ElseBranch {
+    JustElse(BlockArgs),
+    ElseIf(Box<IfArgs>),
+}
+
+impl ElseBranch {
+    pub fn else_if(if_: impl Into<IfArgs>) -> Self {
+        ElseBranch::ElseIf(Box::new(if_.into()))
+    }
 }
 
 impl VarDeclArgs {
@@ -118,6 +126,9 @@ impl VarDeclArgs {
     }
 }
 
+/// A separated code block, not a body of a function
+///
+/// Newtype pattern for `Vec<Stmt>>`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BlockArgs {
     pub stmts: Vec<Stmt>,
@@ -141,3 +152,36 @@ pub struct WhileArgs {
     pub block: BlockArgs,
 }
 
+/// Function definition translated to AST
+#[derive(Clone, Debug, PartialEq)]
+pub struct FnDeclArgs {
+    pub name: String,
+    pub body: FnBody,
+    pub params: Params,
+}
+
+impl FnDeclArgs {
+    pub fn new(name: String, body: Rc<Vec<Stmt>>, params: impl Into<Params>) -> Self {
+        Self {
+            name: name,
+            body: body,
+            params: params.into(),
+        }
+    }
+}
+
+/// In Lox, fields are dynamically added
+#[derive(Clone, Debug, PartialEq)]
+pub struct ClassDeclArgs {
+    pub name: String,
+    pub methods: Vec<FnDeclArgs>,
+}
+
+impl ClassDeclArgs {
+    pub fn new(name: String, methods: Vec<FnDeclArgs>) -> Self {
+        Self {
+            name: name,
+            methods: methods,
+        }
+    }
+}

@@ -12,8 +12,14 @@ pub enum Expr {
     Grouping(Box<GroupData>),
     // TODO: rename me; it may be function
     Variable(VarUseData),
+    /// Assignment to a variable
     Assign(Box<AssignData>),
     Call(Box<CallData>),
+    /// Solves a scope or field
+    Get(Box<GetUseData>),
+    // Assignment to a field of an instance
+    Set(Box<SetUseData>),
+    Self_(SelfData),
 }
 
 /// Helpers for constructing / right recursive parsing
@@ -54,6 +60,7 @@ impl Expr {
         Expr::Variable(VarUseData::new(name, id))
     }
 
+    /// Assignment to a variable
     pub fn assign(name: &str, expr: Expr, id: VarUseId) -> Expr {
         Expr::Assign(Box::new(AssignData {
             assigned: VarUseData::new(name, id),
@@ -61,7 +68,16 @@ impl Expr {
         }))
     }
 
-    pub fn call(callee: Expr, args: Option<Args>) -> Self {
+    /// Assignment to a field of an instance
+    pub fn set(body: Expr, name: &str, value: Expr) -> Expr {
+        Expr::Set(Box::new(SetUseData::new(body, name, value)))
+    }
+
+    pub fn get(body: Expr, name: &str) -> Expr {
+        Expr::Get(Box::new(GetUseData::new(body, name)))
+    }
+
+    pub fn call(callee: Expr, args: Args) -> Self {
         Expr::Call(Box::new(CallData {
             callee: callee,
             args: args,
@@ -271,6 +287,8 @@ impl VarUseData {
 }
 
 /// `=`,  only parsed as an expression statement.
+///
+/// It doesn't contain LHS object 'cause. Instead, it should be gotten from `Env`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct AssignData {
     pub assigned: VarUseData,
@@ -297,5 +315,42 @@ pub type Args = Vec<Expr>;
 #[derive(Clone, Debug, PartialEq)]
 pub struct CallData {
     pub callee: Expr,
-    pub args: Option<Args>,
+    // FIXME: just use `Args` type
+    pub args: Args,
 }
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct GetUseData {
+    pub body: Expr,
+    pub name: String,
+}
+
+impl GetUseData {
+    pub fn new(body: Expr, name: &str) -> Self {
+        Self {
+            body: body,
+            name: name.to_string(),
+        }
+    }
+}
+
+/// It's similar to an assignment, but it tries to assign value to
+#[derive(Clone, Debug, PartialEq)]
+pub struct SetUseData {
+    pub body: Expr,
+    pub name: String,
+    pub value: Expr,
+}
+
+impl SetUseData {
+    pub fn new(body: Expr, name: &str, value: Expr) -> Self {
+        Self {
+            body: body,
+            name: name.to_string(),
+            value: value,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct SelfData {}

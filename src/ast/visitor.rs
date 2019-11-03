@@ -17,6 +17,9 @@ pub trait ExprVisitor<T> {
             Variable(var) => self.visit_var_expr(var),
             Assign(args) => self.visit_assign_expr(args.as_ref()),
             Call(call) => self.visit_call_expr(call.as_ref()),
+            Get(get) => self.visit_get_expr(get.as_ref()),
+            Set(set) => self.visit_set_expr(set.as_ref()),
+            Self_(self_) => self.visit_self_expr(self_),
         }
     }
     fn visit_literal_expr(&mut self, literal: &LiteralData) -> T;
@@ -26,6 +29,9 @@ pub trait ExprVisitor<T> {
     fn visit_var_expr(&mut self, var: &VarUseData) -> T;
     fn visit_assign_expr(&mut self, assign: &AssignData) -> T;
     fn visit_call_expr(&mut self, call: &CallData) -> T;
+    fn visit_get_expr(&mut self, get: &GetUseData) -> T;
+    fn visit_set_expr(&mut self, set: &SetUseData) -> T;
+    fn visit_self_expr(&mut self, self_: &SelfData) -> T;
 }
 
 /// Automates double dispatches
@@ -42,6 +48,7 @@ pub trait StmtVisitor<T> {
             Return(ret) => self.visit_return_stmt(ret),
             While(while_) => self.visit_while_stmt(while_),
             Fn(f) => self.visit_fn_decl(f),
+            Class(c) => self.visit_class_decl(c),
         }
     }
     fn visit_var_decl(&mut self, var: &VarDeclArgs) -> T;
@@ -56,5 +63,6 @@ pub trait StmtVisitor<T> {
     fn visit_return_stmt(&mut self, ret: &Return) -> T;
     fn visit_while_stmt(&mut self, while_: &WhileArgs) -> T;
     // TODO: disable clock as a variable name? (or distinguish two scopes like Lisp 2?)
-    fn visit_fn_decl(&mut self, f: &FnDef) -> T;
+    fn visit_fn_decl(&mut self, f: &FnDeclArgs) -> T;
+    fn visit_class_decl(&mut self, c: &ClassDeclArgs) -> T;
 }

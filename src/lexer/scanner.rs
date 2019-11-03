@@ -177,6 +177,7 @@ impl<'a> Scanner<'a> {
         SourceToken::new(token, pos, self.state.lexeme().to_string())
     }
 
+    /// Tokenizes a string
     pub fn scan(&mut self) -> (Vec<SourceToken>, Vec<ScanError>) {
         let mut tokens = Vec::<SourceToken>::new();
         let mut errors = Vec::<ScanError>::new();
@@ -224,6 +225,7 @@ impl<'a> Scanner<'a> {
             '-' => Ok(Minus),
             ';' => Ok(Semicolon),
             '*' => Ok(Star),
+            '@' => Ok(Self_),
             // comparison
             '!' => self.scan_cmp('=', BangEqual, Bang),
             '=' => self.scan_cmp('=', EqualEqual, Equal),
@@ -356,7 +358,6 @@ impl<'a> Scanner<'a> {
             "print" => Print,
             "return" => Return,
             "super" => Super,
-            "this" => This,
             "true" => True,
             "var" => Var,
             "while" => While,
