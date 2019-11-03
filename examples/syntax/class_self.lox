@@ -1,0 +1,13 @@
+
+class TestClass {
+    fn test_fn() {
+        print "x y z";
+        print @;
+        @.x = 13;
+        print @.x;
+    }
+}
+
+print TestClass();
+TestClass().test_fn();
+
