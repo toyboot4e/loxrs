@@ -60,7 +60,13 @@ pub fn run_file_debug(path: &str) {
 
     let (mut stmts, parse_errors) = Parser::new(&tokens).parse();
     self::print_all_debug(&parse_errors, "===== parse errors =====");
-    self::print_all_display(stmts.iter().map(|s| s.pretty_print()), "===== AST =====");
+    self::print_all_display(
+        stmts
+            .iter()
+            .enumerate()
+            .map(|(i, s)| format!("{} {}", i, s.pretty_print())),
+        "===== AST =====",
+    );
 
     let mut interpreter = Interpreter::new();
     {
