@@ -19,6 +19,7 @@ pub trait ExprVisitor<T> {
             Call(call) => self.visit_call_expr(call.as_ref()),
             Get(get) => self.visit_get_expr(get.as_ref()),
             Set(set) => self.visit_set_expr(set.as_ref()),
+            Self_(self_) => self.visit_self_expr(self_),
         }
     }
     fn visit_literal_expr(&mut self, literal: &LiteralData) -> T;
@@ -30,6 +31,7 @@ pub trait ExprVisitor<T> {
     fn visit_call_expr(&mut self, call: &CallData) -> T;
     fn visit_get_expr(&mut self, get: &GetUseData) -> T;
     fn visit_set_expr(&mut self, set: &SetUseData) -> T;
+    fn visit_self_expr(&mut self, self_: &SelfData) -> T;
 }
 
 /// Automates double dispatches

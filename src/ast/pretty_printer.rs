@@ -3,7 +3,7 @@
 // TODO: indent for nested blocks
 // TODO: use ::std::fmt::Display
 
-fn vec_to_s(xs: impl IntoIterator<Item = impl ::std::fmt::Display>) -> String {
+fn pretty_vec(xs: impl IntoIterator<Item = impl ::std::fmt::Display>) -> String {
     format!(
         "({})",
         xs.into_iter()
@@ -33,6 +33,7 @@ impl PrettyPrint for Expr {
             Call(ref call) => call.pretty_print(),
             Get(ref get) => get.pretty_print(),
             Set(ref set) => set.pretty_print(),
+            Self_(ref self_) => self_.pretty_print(),
         }
     }
 }
@@ -139,7 +140,7 @@ impl PrettyPrint for GroupData {
 impl PrettyPrint for AssignData {
     fn pretty_print(&self) -> String {
         format!(
-            "(set \"{}\" {})",
+            "(assign \"{}\" {})",
             self.assigned.name,
             self.expr.pretty_print()
         )
@@ -151,14 +152,7 @@ impl PrettyPrint for CallData {
         format!(
             "(call {} {})",
             self.callee.pretty_print(),
-            match self.args {
-                Some(ref vec) => vec
-                    .iter()
-                    .map(|expr| expr.pretty_print())
-                    .collect::<Vec<_>>()
-                    .join(", "),
-                None => "()".to_string(),
-            }
+            self::pretty_vec(self.args.iter().map(|expr| expr.pretty_print()))
         )
     }
 }
@@ -175,12 +169,18 @@ impl PrettyPrint for SetUseData {
             "(set {} {} {})",
             self.body.pretty_print(),
             self.name,
-            self.body.pretty_print()
+            self.value.pretty_print(),
         )
     }
 }
 
 // statements
+
+impl PrettyPrint for SelfData {
+    fn pretty_print(&self) -> String {
+        "@".to_string()
+    }
+}
 
 impl PrettyPrint for BlockArgs {
     fn pretty_print(&self) -> String {
@@ -192,20 +192,34 @@ impl PrettyPrint for BlockArgs {
     }
 }
 
-pub fn pretty_fn(name: &str, params: &Option<Params>, stmts: &[Stmt]) -> String {
+pub fn pretty_fn(name: &str, params: &Params, stmts: &[Stmt]) -> String {
     format!(
         "(defn {} {} ({}))",
         name,
-        params
-            .as_ref()
-            .map(|params| self::vec_to_s(params))
-            .unwrap_or("()".into()),
+        self::pretty_vec(params),
         self::pretty_block(stmts)
     )
 }
 
+pub fn pretty_if(if_: &IfArgs) -> String {
+    format!(
+        "(if {} {} {})",
+        if_.condition.pretty_print(),
+        if_.if_true.pretty_print(),
+        match if_.if_false {
+            Some(ref else_) => match else_ {
+                ElseBranch::ElseIf(ref else_if) => self::pretty_if(else_if),
+                ElseBranch::JustElse(ref block) => {
+                    self::pretty_vec(block.stmts.iter().map(|s| s.pretty_print()))
+                }
+            },
+            None => "None".to_string(),
+        }
+    )
+}
+
 pub fn pretty_fn_decl(f: &FnDeclArgs) -> String {
-    self::pretty_fn(&f.name, &f.params, &f.body.stmts)
+    self::pretty_fn(&f.name, &f.params, &f.body)
 }
 
 pub fn pretty_block(stmts: &[Stmt]) -> String {
@@ -226,15 +240,7 @@ impl PrettyPrint for Stmt {
             Expr(ref expr) => format!("(eval {})", expr.pretty_print()),
             Print(ref print) => format!("(print {})", print.expr.pretty_print()),
             Var(ref var) => format!("(var {} {})", var.name, var.init.pretty_print()),
-            If(ref if_) => format!(
-                "(if {} {} {})",
-                if_.condition.pretty_print(),
-                if_.if_true.pretty_print(),
-                match if_.if_false {
-                    Some(ref stmt) => stmt.pretty_print(),
-                    None => "None".to_string(),
-                }
-            ),
+            If(ref if_) => self::pretty_if(if_),
             Block(ref block) => format!(
                 "(progn {})",
                 block.stmts.iter().map(|s| s.pretty_print()).fold(
@@ -253,7 +259,7 @@ impl PrettyPrint for Stmt {
             Class(ref c) => format!(
                 "(class {} ({}))",
                 c.name,
-                vec_to_s(c.methods.iter().map(|m| self::pretty_fn_decl(m))),
+                pretty_vec(c.methods.iter().map(|m| self::pretty_fn_decl(m))),
             ),
         }
     }

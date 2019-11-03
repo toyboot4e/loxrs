@@ -25,7 +25,7 @@ pub enum LoxFnType {
 
 type Scope = HashMap<String, bool>;
 // TODO: map id
-type Caches = HashMap<VarUseData, usize>;
+type VarUseCache = HashMap<VarUseData, usize>;
 
 /// Tracks objects in local scope, analizes them and provides a way to map each variable usage
 /// to specific variable in AST.
@@ -40,12 +40,12 @@ pub struct Resolver<'a> {
     /// Distances from a scope where each variable is in. Only tracks local variables (see 11.3.2
     /// for details)
     // TODO: isize vs usize
-    caches: &'a mut Caches,
+    caches: &'a mut VarUseCache,
 }
 
 // TODO: consider returning multiple errors
 impl<'a> Resolver<'a> {
-    pub fn new(caches: &'a mut Caches) -> Self {
+    pub fn new(caches: &'a mut VarUseCache) -> Self {
         Self {
             // We don't track global definitions.
             scopes: Vec::new(),
@@ -129,28 +129,36 @@ impl<'a> Resolver<'a> {
         Ok(())
     }
 
-    pub fn resolve_fn(&mut self, f: &FnDeclArgs, fn_type: LoxFnType) -> Result<()> {
+    /// Resolves a pure function tracking internal states
+    pub fn resolve_pure_fn(&mut self, f: &FnDeclArgs, fn_type: LoxFnType) -> Result<()> {
+        let enclosing = self.resolve_fn_before(fn_type);
+        let result = self.impl_resolve_fn(f);
+        self.resolve_fn_after(enclosing);
+        result
+    }
+
+    /// Starts tracking state
+    fn resolve_fn_before(&mut self, fn_type: LoxFnType) -> LoxFnType {
         // tracking state
         let enclosing = self.current_fn_type;
         self.current_fn_type = fn_type;
-
         self.begin_scope();
-        let result = self.impl_resolve_fn(f);
-        self.end_scope();
+        enclosing
+    }
 
+    /// Ends tracking state
+    fn resolve_fn_after(&mut self, enclosing: LoxFnType) {
+        self.end_scope();
         self.current_fn_type = enclosing;
-        result
     }
 
     /// Resolves function arguments and the body
     fn impl_resolve_fn(&mut self, f: &FnDeclArgs) -> Result<()> {
-        if let Some(ref params) = f.params {
-            for param in params {
-                self.declare(param)?;
-                self.define(param);
-            }
+        for param in f.params.iter() {
+            self.declare(param)?;
+            self.define(param);
         }
-        self.resolve_stmts(&f.body.stmts)
+        self.resolve_stmts(&f.body)
     }
 }
 
@@ -165,7 +173,7 @@ impl<'a> StmtVisitor<Result<()>> for Resolver<'a> {
     fn visit_fn_decl(&mut self, f: &FnDeclArgs) -> Result<()> {
         self.declare(&f.name)?;
         self.define(&f.name); // we allow to recursively referring to itself
-        self.resolve_fn(f, LoxFnType::Fn)
+        self.resolve_pure_fn(f, LoxFnType::Fn)
     }
 
     // the rest is just passing each stmt/expr to the resolving methods
@@ -176,9 +184,15 @@ impl<'a> StmtVisitor<Result<()>> for Resolver<'a> {
 
     fn visit_if_stmt(&mut self, if_: &IfArgs) -> Result<()> {
         self.resolve_expr(&if_.condition)?;
-        self.resolve_stmt(&if_.if_true)?;
-        if let Some(ref if_false) = if_.if_false {
-            self.resolve_stmt(if_false)?;
+        self.resolve_stmts(&if_.if_true.stmts)?;
+        match if_.if_false {
+            Some(ElseBranch::ElseIf(ref if_)) => {
+                self.visit_if_stmt(&if_)?;
+            }
+            Some(ElseBranch::JustElse(ref else_)) => {
+                self.resolve_block(&else_.stmts)?;
+            }
+            None => {}
         }
         Ok(())
     }
@@ -189,9 +203,10 @@ impl<'a> StmtVisitor<Result<()>> for Resolver<'a> {
 
     fn visit_return_stmt(&mut self, ret: &Return) -> Result<()> {
         if self.current_fn_type == LoxFnType::None {
-            return Err(SemantcicError::ReturnFromNonFunction);
+            Err(SemantcicError::ReturnFromNonFunction)
+        } else {
+            self.resolve_expr(&ret.expr)
         }
-        self.resolve_expr(&ret.expr)
     }
 
     fn visit_while_stmt(&mut self, while_: &WhileArgs) -> Result<()> {
@@ -203,12 +218,19 @@ impl<'a> StmtVisitor<Result<()>> for Resolver<'a> {
         self.resolve_block(stmts)
     }
 
-    fn visit_class_decl(&mut self, c: &ClassDeclArgs) -> Result<()> {
+    fn visit_class_decl(&mut self, class: &ClassDeclArgs) -> Result<()> {
         // Lox permits to declare a class as a local variable
-        self.declare(&c.name)?;
-        self.define(&c.name);
-        for m in c.methods.iter() {
-            self.resolve_fn(m, LoxFnType::Method)?;
+        self.declare(&class.name)?;
+        self.define(&class.name);
+        for method in class.methods.iter() {
+            let enclosing = self.resolve_fn_before(LoxFnType::Method);
+            self.scopes
+                .last_mut()
+                .unwrap()
+                .insert("@".to_string(), true);
+            let result = self.impl_resolve_fn(method);
+            self.resolve_fn_after(enclosing);
+            result?;
         }
         Ok(())
     }
@@ -244,10 +266,8 @@ impl<'a> ExprVisitor<Result<()>> for Resolver<'a> {
 
     fn visit_call_expr(&mut self, call: &CallData) -> Result<()> {
         self.resolve_expr(&call.callee)?;
-        if let Some(ref args) = call.args {
-            for arg in args {
-                self.resolve_expr(arg)?;
-            }
+        for arg in call.args.iter() {
+            self.resolve_expr(arg)?;
         }
         Ok(())
     }
@@ -272,5 +292,10 @@ impl<'a> ExprVisitor<Result<()>> for Resolver<'a> {
     fn visit_set_expr(&mut self, set: &SetUseData) -> Result<()> {
         self.resolve_expr(&set.body)?;
         self.resolve_expr(&set.value)
+    }
+
+    fn visit_self_expr(&mut self, self_: &SelfData) -> Result<()> {
+        // self.resolve_local_var(
+        Ok(())
     }
 }

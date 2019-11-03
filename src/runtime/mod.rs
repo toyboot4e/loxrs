@@ -19,5 +19,6 @@ pub enum RuntimeError {
     NotForDotOperator,
     NoFieldWithName(String),
     ReassignDisabled,
+    CantBind,
 }
 

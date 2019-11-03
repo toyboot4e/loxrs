@@ -12,13 +12,14 @@ pub enum Expr {
     Grouping(Box<GroupData>),
     // TODO: rename me; it may be function
     Variable(VarUseData),
+    /// Assignment to a variable
     Assign(Box<AssignData>),
     Call(Box<CallData>),
     /// Solves a scope or field
     Get(Box<GetUseData>),
-    // Similar to assignment, but the target is a field
+    // Assignment to a field of an instance
     Set(Box<SetUseData>),
-    // Self_,
+    Self_(SelfData),
 }
 
 /// Helpers for constructing / right recursive parsing
@@ -59,6 +60,7 @@ impl Expr {
         Expr::Variable(VarUseData::new(name, id))
     }
 
+    /// Assignment to a variable
     pub fn assign(name: &str, expr: Expr, id: VarUseId) -> Expr {
         Expr::Assign(Box::new(AssignData {
             assigned: VarUseData::new(name, id),
@@ -66,6 +68,7 @@ impl Expr {
         }))
     }
 
+    /// Assignment to a field of an instance
     pub fn set(body: Expr, name: &str, value: Expr) -> Expr {
         Expr::Set(Box::new(SetUseData::new(body, name, value)))
     }
@@ -74,7 +77,7 @@ impl Expr {
         Expr::Get(Box::new(GetUseData::new(body, name)))
     }
 
-    pub fn call(callee: Expr, args: Option<Args>) -> Self {
+    pub fn call(callee: Expr, args: Args) -> Self {
         Expr::Call(Box::new(CallData {
             callee: callee,
             args: args,
@@ -307,14 +310,13 @@ impl From<Token> for Option<AssignOper> {
     }
 }
 
-// TODO: never use `Option<Args>`
 pub type Args = Vec<Expr>;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CallData {
     pub callee: Expr,
     // FIXME: just use `Args` type
-    pub args: Option<Args>,
+    pub args: Args,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -349,3 +351,6 @@ impl SetUseData {
         }
     }
 }
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct SelfData {}

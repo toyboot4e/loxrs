@@ -8,7 +8,7 @@ use crate::ast::{
 use crate::runtime::{env::Env, Result, RuntimeError};
 use ::std::cell::RefCell;
 use ::std::collections::HashMap;
-use ::std::rc::{Rc, Weak};
+use ::std::rc::Rc;
 
 /// Runtime object which represents anything
 #[derive(Clone, Debug)]
@@ -17,7 +17,7 @@ pub enum LoxObj {
     Callable(LoxFn),
     // TODO: consider using Rc or not (to reference from instance)
     Class(Rc<LoxClass>),
-    Instance(LoxInstance),
+    Instance(Rc<RefCell<LoxInstance>>),
 }
 
 impl LoxObj {
@@ -100,6 +100,7 @@ impl LoxObj {
     }
 }
 
+// TODO: remove native functions
 /// Runtime function object (expect class names as constructors)
 #[derive(Clone, Debug)]
 pub enum LoxFn {
@@ -115,13 +116,21 @@ impl LoxFn {
     pub fn from_decl(decl: &FnDeclArgs, closure: &Rc<RefCell<Env>>) -> Self {
         LoxFn::User(LoxUserFn::from_def(decl, closure))
     }
+
+    pub fn bind(&self, instance: &Rc<RefCell<LoxInstance>>) -> Result<Self> {
+        match self {
+            LoxFn::User(f) => Ok(LoxFn::User(f.bind(instance)?)),
+            _ => Err(RuntimeError::CantBind),
+        }
+    }
 }
 
-/// Runtime user-defined function
+/// Runtime representaiton of a user-defined function.
 #[derive(Clone, Debug)]
 pub struct LoxUserFn {
-    pub body: Vec<Stmt>,
-    pub params: Option<Params>,
+    /// `Rc` for slicing the body to instance methods
+    pub body: Rc<Vec<Stmt>>,
+    pub params: Params,
     // TODO: disable mutation
     pub closure: Rc<RefCell<Env>>,
     // TODO: should have name in field or not
@@ -130,10 +139,20 @@ pub struct LoxUserFn {
 impl LoxUserFn {
     pub fn from_def(decl: &FnDeclArgs, closure: &Rc<RefCell<Env>>) -> Self {
         Self {
-            body: decl.body.stmts.clone(),
+            body: Rc::clone(&decl.body),
             params: decl.params.clone(),
             closure: Rc::clone(closure),
         }
+    }
+
+    pub fn bind(&self, instance: &Rc<RefCell<LoxInstance>>) -> Result<LoxUserFn> {
+        let mut env = Env::from_parent(&self.closure);
+        env.define("@", LoxObj::Instance(Rc::clone(instance)))?;
+        Ok(LoxUserFn {
+            body: Rc::clone(&self.body),
+            params: self.params.clone(),
+            closure: Rc::new(RefCell::new(env)),
+        })
     }
 }
 
@@ -161,11 +180,11 @@ impl LoxClass {
     }
 }
 
-/// Instance of a `LoxClass`
+/// Runtime representation of an instance of a `LoxClass`
 #[derive(Clone, Debug)]
 pub struct LoxInstance {
     // FIXME: use indirect access to a class
-    class: Weak<LoxClass>,
+    class: Rc<LoxClass>,
     fields: HashMap<String, LoxObj>,
 }
 
@@ -177,18 +196,19 @@ pub struct AssignHandle {
 impl LoxInstance {
     pub fn new(class: &Rc<LoxClass>) -> Self {
         Self {
-            class: Rc::downgrade(class),
+            class: Rc::clone(class),
             // TODO: initialize with fields
             fields: HashMap::new(),
         }
     }
 
-    /// variables > methods
-    pub fn get(&self, name: &str) -> Result<LoxObj> {
-        if let Some(obj) = self.fields.get(name) {
+    pub fn get(self_: &Rc<RefCell<LoxInstance>>, name: &str) -> Result<LoxObj> {
+        // variable > method
+        if let Some(obj) = self_.borrow().fields.get(name) {
             Ok(obj.clone())
-        } else if let Some(method) = self.class.upgrade().unwrap().find_method(name) {
-            Ok(LoxObj::Callable(method))
+        } else if let Some(method) = self_.borrow().class.find_method(name) {
+            let binded = method.bind(self_)?;
+            Ok(LoxObj::Callable(binded))
         } else {
             Err(RuntimeError::NoFieldWithName(name.to_string()))
         }
@@ -244,7 +264,7 @@ impl PrettyPrint for LoxObj {
             LoxObj::Value(value) => value.pretty_print(),
             LoxObj::Callable(call) => call.pretty_print(),
             LoxObj::Class(class) => class.pretty_print(),
-            LoxObj::Instance(instance) => instance.pretty_print(),
+            LoxObj::Instance(instance) => instance.borrow().pretty_print(),
         }
     }
 }
@@ -283,7 +303,7 @@ impl PrettyPrint for LoxInstance {
     fn pretty_print(&self) -> String {
         format!(
             "(instance {} ({}))",
-            self.class.upgrade().unwrap().pretty_print(),
+            self.class.pretty_print(),
             self.fields
                 .iter()
                 .map(|(key, value)| format!("({} {})", key, value.pretty_print()))

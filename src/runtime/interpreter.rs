@@ -26,9 +26,9 @@ pub struct Interpreter {
 /// Capabilities provided by `Resolver`
 impl Interpreter {
     fn lookup_resolved(&self, var: &VarUseData) -> Result<LoxObj> {
-        if let Some(d) = self.caches.get(var) {
+        if let Some(distance) = self.caches.get(var) {
             // it's a local variable resoled
-            self.env.borrow().get_resolved(&var.name, d.clone())
+            self.env.borrow().get_resolved(&var.name, distance.clone())
         } else {
             // we assume it's a global variables, which are not tracked by the `Resolver`
             self.globals.borrow().get(&var.name)
@@ -80,7 +80,7 @@ impl Interpreter {
     }
 
     /// Invokes a given function object (native or user-defined)
-    pub fn invoke(&mut self, fn_obj: &LoxFn, args: &Option<Args>) -> Result<Option<LoxObj>> {
+    pub fn invoke(&mut self, fn_obj: &LoxFn, args: &Args) -> Result<Option<LoxObj>> {
         match fn_obj {
             LoxFn::User(ref def) => self.invoke_user_fn(def, args),
             LoxFn::Clock => {
@@ -90,36 +90,27 @@ impl Interpreter {
         }
     }
 
-    pub fn invoke_user_fn(
-        &mut self,
-        def: &LoxUserFn,
-        args: &Option<Args>,
-    ) -> Result<Option<LoxObj>> {
-        Self::validate_arities(
-            def.params.as_ref().map(|xs| xs.len()),
-            args.as_ref().map(|xs| xs.len()),
-        )?;
-        let scope = match def.params {
-            Some(ref params) => self.scope_from_args(params, args.as_ref().unwrap())?,
-            None => Env::from_parent(&self.env),
-        };
+    pub fn invoke_user_fn(&mut self, def: &LoxUserFn, args: &Args) -> Result<Option<LoxObj>> {
+        Self::ensure_arities(def.params.len(), args.len())?;
+        let scope = self.scope_from_args(&def.params, args, &def.closure)?;
         self.interpret_stmts_with_scope(&def.body, scope)
     }
 
-    /// Compares two arities (each of which may be None) and makes sure they match
-    fn validate_arities(n1: Option<usize>, n2: Option<usize>) -> Result<()> {
-        match (n1, n2) {
-            (None, None) => Ok(()),
-            (Some(_), None) | (None, Some(_)) => Err(RuntimeError::WrongNumberOfArguments),
-            (Some(len_params), Some(len_args)) if len_params != len_args => {
-                Err(RuntimeError::WrongNumberOfArguments)
-            }
-            _ => Ok(()),
+    fn ensure_arities(n1: usize, n2: usize) -> Result<()> {
+        if n1 != n2 {
+            Err(RuntimeError::WrongNumberOfArguments)
+        } else {
+            Ok(())
         }
     }
 
-    fn scope_from_args(&mut self, params: &[String], args: &[Expr]) -> Result<Env> {
-        let mut scope = Env::from_parent(&self.env);
+    fn scope_from_args(
+        &mut self,
+        params: &[String],
+        args: &[Expr],
+        closure: &Rc<RefCell<Env>>,
+    ) -> Result<Env> {
+        let mut scope = Env::from_parent(closure);
         for i in 0..params.len() {
             scope.define(params[i].as_str(), self.eval_expr(&args[i])?)?;
         }
@@ -127,12 +118,9 @@ impl Interpreter {
     }
 
     /// Milli seconds since the Lox program is started
-    pub fn native_clock(&self, args: &Option<Args>) -> Result<LoxValue> {
-        if !args.is_none() {
-            return Err(RuntimeError::WrongNumberOfArguments);
-        }
+    pub fn native_clock(&self, args: &Args) -> Result<LoxValue> {
+        Self::ensure_arities(0, args.len())?;
         Ok(LoxValue::Number(
-            //self.on_begin.elapsed().unwrap().as_secs() as f64
             self.begin_time.elapsed().unwrap().as_millis() as f64,
         ))
     }
@@ -178,9 +166,13 @@ impl StmtVisitor<Result<Option<LoxObj>>> for Interpreter {
 
     fn visit_if_stmt(&mut self, if_: &IfArgs) -> Result<Option<LoxObj>> {
         if self.eval_expr(&if_.condition)?.is_truthy() {
-            self.interpret(&if_.if_true)
-        } else if let Some(if_false) = if_.if_false.as_ref() {
-            self.interpret(if_false)
+            return self.visit_block_stmt(&if_.if_true.stmts);
+        }
+        if let Some(if_false) = if_.if_false.as_ref() {
+            match if_false {
+                ElseBranch::ElseIf(else_if) => self.visit_if_stmt(else_if),
+                ElseBranch::JustElse(else_) => self.visit_block_stmt(&else_.stmts),
+            }
         } else {
             Ok(None)
         }
@@ -213,9 +205,9 @@ impl StmtVisitor<Result<Option<LoxObj>>> for Interpreter {
     // TODO: do not clone
     fn visit_class_decl(&mut self, c: &ClassDeclArgs) -> Result<Option<LoxObj>> {
         let mut methods = HashMap::<String, LoxFn>::new();
-        for method in c.methods.iter() {
-            let f = LoxFn::from_decl(method, &self.env);
-            methods.insert(method.name.to_owned(), f);
+        for f in c.methods.iter() {
+            let method = LoxFn::from_decl(f, &self.env);
+            methods.insert(f.name.to_owned(), method);
         }
         let class = LoxClass {
             name: c.name.to_owned(),
@@ -409,11 +401,10 @@ impl ExprVisitor<Result<LoxObj>> for Interpreter {
                     .unwrap_or_else(|| LoxObj::nil());
                 Ok(obj)
             }
+            // we treat a class name as a constructor
             LoxObj::Class(ref class) => {
-                // we treat a class name as a constructor
                 let instance = LoxInstance::new(class);
-                // TODO: setup fields
-                Ok(LoxObj::Instance(instance))
+                Ok(LoxObj::Instance(Rc::new(RefCell::new(instance))))
             }
             _ => Err(RuntimeError::MismatchedType),
         }
@@ -422,10 +413,7 @@ impl ExprVisitor<Result<LoxObj>> for Interpreter {
     fn visit_get_expr(&mut self, get: &GetUseData) -> Result<LoxObj> {
         let body = self.eval_expr(&get.body)?;
         match body {
-            LoxObj::Instance(ref instance) => {
-                let got = instance.get(&get.name)?;
-                Ok(got)
-            }
+            LoxObj::Instance(ref instance) => LoxInstance::get(instance, &get.name),
             _ => Err(RuntimeError::NotForDotOperator),
         }
     }
@@ -436,11 +424,15 @@ impl ExprVisitor<Result<LoxObj>> for Interpreter {
         match body {
             LoxObj::Instance(ref mut instance) => {
                 let obj = self.eval_expr(&set.value)?;
-                instance.set(&set.name, obj);
+                instance.borrow_mut().set(&set.name, obj);
                 // TODO: is it ok to return nil
                 Ok(LoxObj::nil())
             }
             _ => Err(RuntimeError::NotForDotOperator),
         }
+    }
+
+    fn visit_self_expr(&mut self, self_: &SelfData) -> Result<LoxObj> {
+        self.env.borrow().get_resolved("@", 0)
     }
 }
