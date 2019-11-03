@@ -129,7 +129,6 @@ pub struct LoxUserFn {
 
 impl LoxUserFn {
     pub fn from_def(decl: &FnDeclArgs, closure: &Rc<RefCell<Env>>) -> Self {
-        let env = Env::from_parent(&closure);
         Self {
             body: decl.body.stmts.clone(),
             params: decl.params.clone(),
@@ -138,6 +137,7 @@ impl LoxUserFn {
     }
 }
 
+/// Runtime representation of a class
 #[derive(Clone, Debug)]
 pub struct LoxClass {
     pub name: String,
@@ -154,6 +154,10 @@ impl LoxClass {
                 .map(|m| (m.name.to_owned(), LoxFn::from_decl(m, closure)))
                 .collect(),
         }
+    }
+
+    pub fn find_method(&self, name: &str) -> Option<LoxFn> {
+        self.methods.get(name).map(|m| m.clone())
     }
 }
 
@@ -179,10 +183,12 @@ impl LoxInstance {
         }
     }
 
-    // TODO: maybe enable immutable access
+    /// variables > methods
     pub fn get(&self, name: &str) -> Result<LoxObj> {
         if let Some(obj) = self.fields.get(name) {
             Ok(obj.clone())
+        } else if let Some(method) = self.class.upgrade().unwrap().find_method(name) {
+            Ok(LoxObj::Callable(method))
         } else {
             Err(RuntimeError::NoFieldWithName(name.to_string()))
         }

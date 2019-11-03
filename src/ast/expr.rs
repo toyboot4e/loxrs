@@ -18,6 +18,7 @@ pub enum Expr {
     Get(Box<GetUseData>),
     // Similar to assignment, but the target is a field
     Set(Box<SetUseData>),
+    // Self_,
 }
 
 /// Helpers for constructing / right recursive parsing
@@ -67,6 +68,10 @@ impl Expr {
 
     pub fn set(body: Expr, name: &str, value: Expr) -> Expr {
         Expr::Set(Box::new(SetUseData::new(body, name, value)))
+    }
+
+    pub fn get(body: Expr, name: &str) -> Expr {
+        Expr::Get(Box::new(GetUseData::new(body, name)))
     }
 
     pub fn call(callee: Expr, args: Option<Args>) -> Self {
@@ -319,10 +324,10 @@ pub struct GetUseData {
 }
 
 impl GetUseData {
-    pub fn new(body: Expr, name: String) -> Self {
+    pub fn new(body: Expr, name: &str) -> Self {
         Self {
             body: body,
-            name: name,
+            name: name.to_string(),
         }
     }
 }
@@ -336,10 +341,10 @@ pub struct SetUseData {
 }
 
 impl SetUseData {
-    pub fn new(body: Expr, name: impl Into<String>, value: Expr) -> Self {
+    pub fn new(body: Expr, name: &str, value: Expr) -> Self {
         Self {
             body: body,
-            name: name.into(),
+            name: name.to_string(),
             value: value,
         }
     }

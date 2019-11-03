@@ -604,10 +604,8 @@ where
 
                 Token::Dot => {
                     self.advance();
-                    // prop → "." identifier
-                    self.expr_call_prop()?;
                     let name = self.try_consume_identifier()?;
-                    // TODO: combine
+                    expr = Expr::get(expr, &name);
                 }
 
                 _ => {
@@ -640,12 +638,7 @@ where
         }
     }
 
-    /// prop → "." identifier ;
-    fn expr_call_prop(&mut self) -> Result<Args> {
-        unimplemented!()
-    }
-
-    /// primary → literal | group |indentifier ;
+    /// primary → literal | group | indentifier | self ;
     ///
     /// literal → number | string | "false" | "true" | "nil" ;
     /// group   → "(" expression ")" ;
@@ -655,14 +648,15 @@ where
         // TODO: refactor
         let mut var = {
             let s_token = self.try_next()?;
-            if let Some(literal) = LiteralData::from_token(&s_token.token) {
-                return Ok(literal.into());
-            }
             use Token::*;
             let name = match s_token.token {
                 LeftParen => return self.expr_group(),
                 Identifier(ref name) => name,
+                // Self_ => Expr::Self,
                 _ => {
+                    if let Some(literal) = LiteralData::from_token(&s_token.token) {
+                        return Ok(literal.into());
+                    }
                     return Err(ParseError::unexpected(
                         s_token,
                         // TODO: abstract token for literals
