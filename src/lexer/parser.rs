@@ -609,7 +609,6 @@ where
                         Vec::new()
                     } else {
                         let args = self.expr_call_args()?;
-                        self.try_consume(&Token::RightParen)?;
                         args
                     };
                     expr = Expr::call(expr, args);
@@ -636,9 +635,11 @@ where
         loop {
             match self.try_peek()? {
                 s_token if s_token.token == Token::Comma => {
+                    self.advance();
                     args.push(self.expr()?);
                 }
                 s_token if s_token.token == Token::RightParen => {
+                    self.advance();
                     return Ok(args);
                 }
                 s_token => {
