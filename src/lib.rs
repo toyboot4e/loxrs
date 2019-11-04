@@ -17,8 +17,12 @@ use crate::runtime::Interpreter;
 use std::fs;
 use std::io::{self, BufRead, BufWriter, Write};
 
+pub struct RunContext {
+    pub is_debug: bool,
+}
+
 // TODO: buffering for reading source files
-pub fn run_file(path: &str) {
+pub fn run_file(path: &str, cx: &RunContext) {
     let source = match fs::read_to_string(path) {
         Err(why) => {
             println!("{} (given path: `{}`)", why, path);
@@ -26,47 +30,27 @@ pub fn run_file(path: &str) {
         }
         Ok(s) => s,
     };
+
     let (tokens, scan_errors) = Scanner::new(&source).scan();
+    if cx.is_debug {
+        self::print_all_debug(&scan_errors, "====== scan errors =====");
+        self::print_all_debug(&tokens, "====== tokens =====");
+    }
+
     let (mut stmts, parse_errors) = Parser::new(&tokens).parse();
+    if cx.is_debug {
+        self::print_all_debug(&parse_errors, "===== parse errors =====");
+        self::print_all_display(
+            stmts
+                .iter()
+                .enumerate()
+                .map(|(i, s)| format!("{} {}", i, s.pretty_print())),
+            "===== AST =====",
+        );
+    }
     if parse_errors.len() > 0 {
-        println!("parse error");
         return;
     }
-    let mut interpreter = Interpreter::new();
-    {
-        let mut resolver = Resolver::new(&mut interpreter.caches);
-        if let Err(why) = resolver.resolve_stmts(&mut stmts) {
-            println!("====== resolving error ======");
-            println!("{:?}", why);
-            return;
-        }
-    }
-    self::interpret(&mut stmts, &mut interpreter);
-}
-
-/// Runs a file with debug output (including lexer output)
-pub fn run_file_debug(path: &str) {
-    let source = match fs::read_to_string(path) {
-        Err(why) => {
-            println!("{}", why);
-            ::std::process::exit(1);
-        }
-        Ok(s) => s,
-    };
-
-    let (tokens, scan_errors) = Scanner::new(&source).scan();
-    self::print_all_debug(&scan_errors, "====== scan errors =====");
-    self::print_all_debug(&tokens, "====== tokens =====");
-
-    let (mut stmts, parse_errors) = Parser::new(&tokens).parse();
-    self::print_all_debug(&parse_errors, "===== parse errors =====");
-    self::print_all_display(
-        stmts
-            .iter()
-            .enumerate()
-            .map(|(i, s)| format!("{} {}", i, s.pretty_print())),
-        "===== AST =====",
-    );
 
     let mut interpreter = Interpreter::new();
     {
@@ -77,7 +61,7 @@ pub fn run_file_debug(path: &str) {
             return;
         }
     }
-    self::interpret(&mut stmts, &mut interpreter);
+    self::interpret(&mut interpreter, &mut stmts, cx);
 }
 
 fn print_all_debug(items: impl IntoIterator<Item = impl ::std::fmt::Debug>, description: &str) {
@@ -113,6 +97,7 @@ pub fn run_repl() {
     let mut out = BufWriter::new(out.lock());
     let handle = io::stdin();
     let mut handle = handle.lock();
+
     loop {
         print!("{}", prompt_str);
         out.flush().expect("error when flushing stdout");
@@ -129,8 +114,10 @@ pub fn run_repl() {
     }
 }
 
-pub fn interpret(stmts: &mut [Stmt], interpreter: &mut Interpreter) {
-    println!("====== interpretations =====");
+pub fn interpret(interpreter: &mut Interpreter, stmts: &mut [Stmt], cx: &RunContext) {
+    if cx.is_debug {
+        println!("====== interpretations =====");
+    }
     for (i, stmt) in stmts.iter().enumerate() {
         if let Err(why) = interpreter.interpret(stmt) {
             println!("\n====== runtime errors =====");
