@@ -13,6 +13,3 @@ fn test_return(x) {
 
 print test_return(20);
 
-// TODO: enable escapes in quotes
-// print "..got proper return value `"returned"`?";
-

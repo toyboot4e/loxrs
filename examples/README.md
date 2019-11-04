@@ -1,3 +1,3 @@
-# tests
+# Examples
 
-We can test with these `.lox` files: `$ cargo run -- tests/the_file_to_test.lox`.
+Use `cargo run -- <filename>` to run a program.

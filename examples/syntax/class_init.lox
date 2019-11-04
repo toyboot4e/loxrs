@@ -5,7 +5,6 @@ class Vec2 {
     }
 
     fn add(another) {
-        // TODO: impl += -= *~ /=
         return Vec2(@.x + another.x, @.y + another.y);
     }
 }

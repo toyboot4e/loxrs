@@ -1,4 +1,4 @@
-print "there's a print below";
+print "there's a print commented out below";
 
 // one line comment
 
@@ -6,7 +6,7 @@ print "there's a print below";
 comment
 */
 
-/* nestable /* comment */ is .. */ // here
+/* nested /* comment */ is .. */ // here
 
 print "no error in the above, right?";
 
