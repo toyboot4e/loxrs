@@ -8,6 +8,7 @@ use crate::ast::{
 use crate::runtime::{env::Env, Result, RuntimeError};
 use ::std::cell::RefCell;
 use ::std::collections::HashMap;
+use ::std::fmt::Write;
 use ::std::rc::Rc;
 
 /// Runtime object which represents anything
@@ -284,7 +285,14 @@ impl PrettyPrint for LoxFn {
 
 impl PrettyPrint for LoxUserFn {
     fn pretty_print(&self) -> String {
-        pretty_printer::pretty_fn("runtime-fn", &self.params, &self.body)
+        let mut s = String::new();
+        write!(s, "(fn ").unwrap();
+        pretty_printer::write_slice(&mut s, &self.params);
+        write!(s, "\n").unwrap();
+        pretty_printer::write_indent(&mut s, 1);
+        pretty_printer::write_stmts(&mut s, 1, &self.body);
+        write!(s, ")").unwrap();
+        s
     }
 }
 
