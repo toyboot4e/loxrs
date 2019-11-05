@@ -263,7 +263,7 @@ impl PrettyPrint for AssignData {
 impl PrettyPrint for CallData {
     fn pretty_print(&self) -> String {
         format!(
-            "(call {} {})",
+            "({} {})",
             self.callee.pretty_print(),
             self::pretty_vec(self.args.iter().map(|expr| expr.pretty_print()))
         )
