@@ -17,6 +17,50 @@ use crate::runtime::Interpreter;
 use std::fs;
 use std::io::{self, BufRead, BufWriter, Write};
 
+// ***** cli / arg parse *****
+
+pub struct Cli {
+    pub cx: RunContext,
+    pub run_file: Option<String>,
+}
+
+impl Cli {
+    pub fn run(&self) {
+        if let Some(file) = self.run_file.as_ref() {
+            self::run_file(file, &self.cx);
+        } else {
+            self::run_repl();
+        }
+    }
+}
+
+pub fn parse_args() -> Cli {
+    let mut cx = RunContext { is_debug: false };
+    let mut file: Option<String> = None;
+
+    let args: Vec<String> = ::std::env::args().collect();
+    for arg in args.iter().skip(1) {
+        match arg.as_str() {
+            "-d" | "--debug" => cx.is_debug = true,
+            arg => {
+                if file.is_none() {
+                    file = Some(arg.to_string());
+                } else {
+                    eprintln!("Given more than one argument");
+                    ::std::process::exit(1);
+                }
+            }
+        }
+    }
+
+    Cli {
+        cx: cx,
+        run_file: file,
+    }
+}
+
+// ***** run *****
+
 pub struct RunContext {
     pub is_debug: bool,
 }
