@@ -6,17 +6,11 @@ Yet another hobby project to follow the book [Crafting Interpreters](http://www.
 
 I'm doing part II (treewalk interpreter). Done: Ch.12 [Classes](https://craftinginterpreters.com/classes.html).
 
-### TODO
-
-- Challenges 
-- Better error context
-- Add `+=` etc. 
-- PrettyPrint with indent 
-- Ch. 13 (inheritance) 
-
 ## Example
 
-Do `cargo run -- <filename>` to run a program. Some keywords have different names from the original.
+### Runnning a File
+
+Do `cargo run -- <filename>` to run a program.
 
 ```rust
 class Vec2 {
@@ -33,6 +27,38 @@ class Vec2 {
 var x = Vec2(1, 2);
 var y = Vec2(3, 4);
 print x.add(y);
+```
+
+> Some keywords have different names from the original.
+
+### Debug output of AST
+
+When `-d` or `--debug` is specified, you get debug output. It contains a pretty-printed AST:
+
+```sh
+$ cargo run -- examples/syntax/class_self.lox --debug | sed -n '/^===== AST/,/^$/p'
+===== AST =====
+0 (class TestClass
+    (defn test_fn ()
+        (print "x y z")
+        (print @)
+        (eval (set @ x 13))
+        (print (get x @))))
+1 (print (TestClass ()))
+2 (eval ((get test_fn (TestClass ())) ()))
+3 (print @)
+
+```
+
+### REPL
+
+```sh
+$ cargo run
+Entered loxrs REPL (q or Ctrl-c for quit)
+> var x = 3;
+> print x;
+3
+>
 ```
 
 ## Layout of the source code
@@ -90,4 +116,12 @@ $ cd src; tree
 - runtime (treewalk) 
     - using visitor pattern vs just `match` to AST 
     - using concrete types rather than wrapping them with a `Stmt` 
+
+## TODO
+
+- Challenges
+- Better error context
+- Add `+=` etc.
+- Better REPL
+- Ch. 13 (inheritance)
 
