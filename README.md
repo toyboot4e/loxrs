@@ -16,7 +16,11 @@ I'm doing part II (treewalk interpreter). Done: Ch.12 [Classes](https://crafting
 
 ## Example
 
-Do `cargo run -- <filename>` to run a program. Some keywords have different names from the original.
+### Runnning a File
+
+Do `cargo run -- <filename>` to run a program.
+
+> Some keywords have different names from the original.
 
 ```rust
 class Vec2 {
@@ -33,6 +37,37 @@ class Vec2 {
 var x = Vec2(1, 2);
 var y = Vec2(3, 4);
 print x.add(y);
+```
+
+### Debug output of AST
+
+You get debug output when `-d` or `--debug` is specified. It contains a pretty-printed AST:
+
+```sh
+$ cargo run -- examples/syntax/class_self.lox --debug | sed -n '/^===== AST/,/^$/p'
+===== AST =====
+0 (class TestClass
+    (defn test_fn ()
+        (print "x y z")
+        (print @)
+        (eval (set @ x 13))
+        (print (get x @))))
+1 (print (TestClass ()))
+2 (eval ((get test_fn (TestClass ())) ()))
+3 (print @)
+
+```
+
+### REPL
+
+```sh
+$ cargo run
+Entered loxrs REPL (q or Ctrl-c for quit)
+> var x = 3;
+Ok(Value(Nil)
+> print x;
+Ok(Value(Nil))
+>
 ```
 
 ## Layout of the source code
