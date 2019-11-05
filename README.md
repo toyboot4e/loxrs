@@ -10,7 +10,7 @@ I'm doing part II (treewalk interpreter). Done: Ch.12 [Classes](https://crafting
 
 ### Runnning a File
 
-Do `cargo run -- <filename>` to run a program.
+You can run a program such as this:
 
 ```rust
 class Vec2 {
@@ -30,6 +30,8 @@ print x.add(y);
 ```
 
 > Some keywords have different names from the original.
+
+Do `cargo run -- <filename>` to run a program.
 
 ### Debug output of AST
 
