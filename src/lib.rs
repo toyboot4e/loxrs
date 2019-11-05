@@ -203,8 +203,8 @@ pub fn run_repl(cx: &RunContext) {
                 break;
             }
             line => {
-                if let Some(result) = self::run_string(line, cx, &mut interpreter) {
-                    println!("{:?}", result);
+                if let Some(Err(why)) = self::run_string(line, cx, &mut interpreter) {
+                    println!("{:?}", why);
                 }
             }
         }
