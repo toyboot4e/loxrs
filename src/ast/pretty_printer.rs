@@ -1,15 +1,44 @@
-//! Prints expression in a pretty format
+//! Prints expression/statement in a pretty format
 
+use crate::ast::{expr::*, stmt::*};
 use ::std::fmt::Write;
 
-// TODO: indent for nested blocks
-// TODO: use ::std::fmt::Display
+// *****************************
+// ***** Pretty print Stmt *****
+// *****************************
 
 impl PrettyPrint for Stmt {
     fn pretty_print(&self) -> String {
         let mut s = String::new();
-        self::pretty_write_stmt(&mut s, 0, self);
+        self::write_stmt(&mut s, 0, self);
         return s;
+    }
+}
+
+/// Dispatches a sub function to pretty write a `Stmt`
+pub fn write_stmt(s: &mut String, indent: isize, stmt: &Stmt) {
+    use Stmt::*;
+    match *stmt {
+        Expr(ref expr) => write!(s, "(eval {})", expr.pretty_print()).unwrap(),
+        Print(ref print) => write!(s, "(print {})", print.expr.pretty_print()).unwrap(),
+        Var(ref var) => write!(s, "(var {} {})", var.name, var.init.pretty_print()).unwrap(),
+        If(ref if_) => self::write_if(s, indent + 1, if_),
+        Block(ref block) => {
+            write!(s, "(block ").unwrap();
+            write_stmts(s, indent + 1, &block.stmts);
+            write!(s, ")").unwrap();
+        }
+        Return(ref ret) => write!(s, "(return {})", ret.expr.pretty_print()).unwrap(),
+        While(ref while_) => {
+            write!(s, "(while {}\n", while_.condition.pretty_print(),).unwrap();
+            self::write_indent(s, indent + 1);
+            self::write_stmts(s, indent + 1, &while_.block.stmts);
+            write!(s, ")").unwrap();
+        }
+        Fn(ref f) => write_fn(s, indent, f),
+        Class(ref class) => {
+            self::write_class(s, indent, class);
+        }
     }
 }
 
@@ -40,6 +69,16 @@ pub fn write_fn(s: &mut String, indent: isize, f: &FnDeclArgs) {
     write!(s, ")").unwrap();
 }
 
+pub fn write_class(s: &mut String, indent: isize, class: &ClassDeclArgs) {
+    write!(s, "(class {}", class.name,).unwrap();
+    for method in class.methods.iter() {
+        write!(s, "\n").unwrap();
+        write_indent(s, indent + 1);
+        self::write_fn(s, indent + 1, method);
+    }
+    write!(s, ")").unwrap();
+}
+
 pub fn write_block(s: &mut String, indent: isize, stmts: &[Stmt]) {
     write!(s, "(block \n").unwrap();
     self::write_indent(s, indent);
@@ -49,29 +88,29 @@ pub fn write_block(s: &mut String, indent: isize, stmts: &[Stmt]) {
 
 pub fn write_stmts(s: &mut String, indent: isize, stmts: &[Stmt]) {
     if stmts.len() == 1 {
-        self::pretty_write_stmt(s, indent, &stmts[0]);
+        self::write_stmt(s, indent, &stmts[0]);
         return;
     }
     match stmts.split_last() {
         Some((last, stmts)) => {
             for stmt in stmts {
-                self::pretty_write_stmt(s, indent, stmt);
+                self::write_stmt(s, indent, stmt);
                 write!(s, "\n").unwrap();
                 self::write_indent(s, indent);
             }
-            self::pretty_write_stmt(s, indent, last);
+            self::write_stmt(s, indent, last);
         }
         None => {}
     }
 }
 
-pub fn pretty_write_if(s: &mut String, indent: isize, if_: &IfArgs) {
+pub fn write_if(s: &mut String, indent: isize, if_: &IfArgs) {
     write!(s, "(if {} ", if_.condition.pretty_print()).unwrap();
     self::write_stmts(s, indent + 1, &if_.if_true.stmts);
     write!(s, " ").unwrap();
     match if_.if_false {
         Some(ref else_) => match else_ {
-            ElseBranch::ElseIf(ref else_if) => self::pretty_write_if(s, indent + 1, &else_if),
+            ElseBranch::ElseIf(ref else_if) => self::write_if(s, indent + 1, &else_if),
             ElseBranch::JustElse(ref block) => {
                 self::write_stmts(s, indent + 1, &block.stmts);
             }
@@ -80,41 +119,9 @@ pub fn pretty_write_if(s: &mut String, indent: isize, if_: &IfArgs) {
     }
 }
 
-pub fn pretty_write_stmt(s: &mut String, indent: isize, stmt: &Stmt) {
-    use Stmt::*;
-    match *stmt {
-        Expr(ref expr) => write!(s, "(eval {})", expr.pretty_print()).unwrap(),
-        Print(ref print) => write!(s, "(print {})", print.expr.pretty_print()).unwrap(),
-        Var(ref var) => write!(s, "(var {} {})", var.name, var.init.pretty_print()).unwrap(),
-        If(ref if_) => self::pretty_write_if(s, indent + 1, if_),
-        Block(ref block) => {
-            write!(s, "(block ").unwrap();
-            write_stmts(s, indent + 1, &block.stmts);
-            write!(s, ")").unwrap();
-        }
-        Return(ref ret) => write!(s, "(return {})", ret.expr.pretty_print()).unwrap(),
-        While(ref while_) => {
-            write!(s, "(while {}\n", while_.condition.pretty_print(),).unwrap();
-            self::write_indent(s, indent + 1);
-            self::write_stmts(s, indent + 1, &while_.block.stmts);
-            write!(s, ")").unwrap();
-        }
-        Fn(ref f) => write_fn(s, indent, f),
-        Class(ref class) => {
-            write!(s, "(class {}\n", class.name,).unwrap();
-            self::write_indent(s, indent + 1);
-            if let Some((last, methods)) = class.methods.split_last() {
-                for method in methods.iter() {
-                    self::write_fn(s, indent + 1, method);
-                    write!(s, "\n").unwrap();
-                    write_indent(s, indent);
-                }
-                self::write_fn(s, indent + 1, last);
-            }
-            write!(s, ")").unwrap();
-        }
-    }
-}
+// ****************************
+// ***** Pretty print AST *****
+// ****************************
 
 pub fn pretty_vec(xs: impl IntoIterator<Item = impl ::std::fmt::Display>) -> String {
     format!(
@@ -125,8 +132,6 @@ pub fn pretty_vec(xs: impl IntoIterator<Item = impl ::std::fmt::Display>) -> Str
             .join(", ".into())
     )
 }
-
-use crate::ast::{expr::*, stmt::*};
 
 pub trait PrettyPrint {
     fn pretty_print(&self) -> String;
@@ -151,7 +156,7 @@ impl PrettyPrint for Expr {
     }
 }
 
-// Implemented for operators
+/// Implemented to operators
 trait PrettyPrintHelper {
     fn pretty_print_help(&self) -> &str;
 }
