@@ -31,24 +31,29 @@ print x.add(y);
 
 > Some keywords have different names from the original.
 
-Do `cargo run -- <filename>` to run a program.
+Let's run it:
+
+```rust
+$ cargo run -- examples/for_readme.lox
+(instance (class Vec2) ((x 4), (y 6)))
+```
 
 ### Debug output of AST
 
 When `-d` or `--debug` is specified, you get debug output. It contains a pretty-printed AST:
 
 ```sh
-$ cargo run -- examples/syntax/class_self.lox --debug | sed -n '/^===== AST/,/^$/p'
+$ cargo run -- examples/for_readme.lox --debug | sed -n '/^===== AST/,/^$/p'
 ===== AST =====
-0 (class TestClass
-    (defn test_fn ()
-        (print "x y z")
-        (print @)
-        (eval (set @ x 13))
-        (print (get x @))))
-1 (print (TestClass ()))
-2 (eval ((get test_fn (TestClass ())) ()))
-3 (print @)
+0 (class Vec2
+    (defn init (x, y)
+        (eval (set @ x x))
+        (eval (set @ y y)))
+(defn add (another)
+        (return (Vec2 ((+ (get x @) (get x another)), (+ (get y @) (get y another)))))))
+1 (var x (Vec2 (1, 2)))
+2 (var y (Vec2 (3, 4)))
+3 (print ((get add x) (y)))
 
 ```
 
