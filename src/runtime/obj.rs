@@ -296,18 +296,10 @@ impl PrettyPrint for LoxUserFn {
     }
 }
 
-// TODO: more efficient string generation
+// TODO: use & make writing methods
 impl PrettyPrint for LoxClass {
     fn pretty_print(&self) -> String {
-        format!(
-            "(class {} ({}))",
-            &self.name,
-            self.methods
-                .iter()
-                .map(|(name, f)| format!("{}: {}", name, f.pretty_print()))
-                .collect::<Vec<_>>()
-                .join(", ")
-        )
+        format!("(class {})", &self.name)
     }
 }
 
