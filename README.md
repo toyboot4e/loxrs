@@ -49,7 +49,7 @@ $ cargo run -- examples/for_readme.lox --debug | sed -n '/^===== AST/,/^$/p'
     (defn init (x, y)
         (eval (set @ x x))
         (eval (set @ y y)))
-(defn add (another)
+    (defn add (another)
         (return (Vec2 ((+ (get x @) (get x another)), (+ (get y @) (get y another)))))))
 1 (var x (Vec2 (1, 2)))
 2 (var y (Vec2 (3, 4)))
