@@ -98,17 +98,12 @@ where
             .map(|t| t.clone())
     }
 
-    /// Just a wrapper around `Iterator::any`.
-    fn _any(s_token: &SourceToken, expected: &[Token]) -> bool {
-        expected.iter().any(|t| t == &s_token.token)
-    }
-
     /// Returns some matched token or None. Just a wrapper around `Parser::peek` and
     /// `Iterator::any`.
     /// Copies a `Token` if it's found.
     fn peek_find(&mut self, expected: &[Token]) -> Option<&&SourceToken> {
         let s_token = self.peek()?;
-        if Self::_any(s_token, expected) {
+        if expected.contains(&s_token.token) {
             Some(s_token)
         } else {
             None
@@ -116,7 +111,7 @@ where
     }
 
     fn peek_any(&mut self, expected: &[Token]) -> Option<bool> {
-        Some(Self::_any(self.peek()?, expected))
+        Some(expected.contains(&self.peek()?.token))
     }
 
     /// Consumes the next token if it matches any of the expected tokens.
@@ -163,8 +158,8 @@ where
         }
     }
 
-    // FIXME: cannot identify token with fields
-    fn consume_any_of(&mut self, expected: &[Token]) -> Option<Token> {
+    // cannot identify token with fields
+    fn consume_one_of(&mut self, expected: &[Token]) -> Option<Token> {
         let opt = Self::_find(self.peek()?, expected);
         if opt.is_some() {
             self.next();
@@ -187,7 +182,7 @@ where
 
     /// Calls `Self::try_peek_find` and advance if it's ok.
     /// Copies a`Token` if it's found.
-    fn try_consume_any_of(&mut self, expected: &[Token]) -> Result<Token> {
+    fn try_consume_one_of(&mut self, expected: &[Token]) -> Result<Token> {
         let result = self.try_peek_find(expected);
         if result.is_ok() {
             self.next();
@@ -474,7 +469,7 @@ where
         Folder: Fn(Expr, Oper, Expr) -> Expr,
     {
         let mut expr = sub_rule(self)?;
-        while let Some(token) = self.consume_any_of(delimiters) {
+        while let Some(token) = self.consume_one_of(delimiters) {
             let right = sub_rule(self)?;
             let oper = token.into().unwrap();
             expr = folder(expr, oper, right);
@@ -497,7 +492,7 @@ where
         Folder: Fn(Expr, Oper, Expr) -> Result<Expr>,
     {
         let mut expr = left;
-        while let Some(token) = self.consume_any_of(delimiters) {
+        while let Some(token) = self.consume_one_of(delimiters) {
             let right = sub_rule(self)?;
             let oper = token.into().unwrap();
             expr = folder(expr, oper, right)?;

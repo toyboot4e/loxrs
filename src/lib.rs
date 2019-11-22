@@ -176,10 +176,10 @@ pub fn interpret(
     return result.map(|opt| opt.unwrap_or(LoxObj::nil()));
 }
 
-// ***** run REPL *****
+// ********** REPL **********
 
 pub fn run_repl(cx: &RunContext) {
-    println!("Entered loxrs REPL (q or Ctrl-c for quit)");
+    println!("Entered loxrs REPL (press q<Enter> or Ctrl-c to quit)");
     let prompt_str = "> ";
 
     let mut line = String::new();

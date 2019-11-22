@@ -8,7 +8,7 @@ pub type FnBody = Rc<Vec<Stmt>>;
 /// Stmt → expr | if | print | block ;
 #[derive(Clone, Debug, PartialEq)]
 pub enum Stmt {
-    /// Just evaluate the expression
+    /// Just evaluate the expression (for side effects)
     Expr(Expr),
     Fn(FnDeclArgs),
     Print(PrintArgs),
@@ -16,7 +16,7 @@ pub enum Stmt {
     If(Box<IfArgs>),
     Return(Return),
     While(WhileArgs),
-    /// A non-negeric separated code block, not a body of a function
+    /// A code block except a body of a function
     Block(BlockArgs),
     Class(ClassDeclArgs),
 }
@@ -87,10 +87,7 @@ pub struct VarDeclArgs {
 #[derive(Clone, Debug, PartialEq)]
 pub struct IfArgs {
     pub condition: Expr,
-    // branches
-    /// True branch
     pub if_true: BlockArgs,
-    /// Else branch. If it's `if`, the branch means `if else`.
     pub if_false: Option<ElseBranch>,
 }
 

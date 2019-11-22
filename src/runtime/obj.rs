@@ -243,7 +243,7 @@ impl LoxInstance {
     }
 }
 
-// impl PrettyPrint
+// impl PrettyPrint for the `print` native function
 
 impl PrettyPrint for LoxValue {
     fn pretty_print(&self) -> String {
@@ -305,14 +305,23 @@ impl PrettyPrint for LoxClass {
 
 impl PrettyPrint for LoxInstance {
     fn pretty_print(&self) -> String {
-        format!(
-            "(instance {} ({}))",
-            self.class.pretty_print(),
-            self.fields
-                .iter()
-                .map(|(key, value)| format!("({} {})", key, value.pretty_print()))
-                .collect::<Vec<_>>()
-                .join(", ")
-        )
+        let mut s = String::new();
+        self::write_instance(&mut s, self);
+        s
     }
+}
+
+fn write_instance(s: &mut String, instance: &LoxInstance) {
+    write!(s, "(instance ").unwrap();
+    self::write_class_obj(s, &instance.class);
+    write!(s, " (").unwrap();
+    for (name, method) in instance.fields.iter() {
+        write!(s, "({} ", name).unwrap();
+        write!(s, ")").unwrap();
+    }
+    write!(s, ")").unwrap();
+}
+
+fn write_class_obj(s: &mut String, class: &LoxClass) {
+    write!(s, "(class {})", &class.name).unwrap();
 }

@@ -61,7 +61,7 @@ $ cargo run -- examples/for_readme.lox --debug | sed -n '/^===== AST/,/^$/p'
 
 ```sh
 $ cargo run
-Entered loxrs REPL (q or Ctrl-c for quit)
+Entered loxrs REPL (press q<Enter> or Ctrl-c to quit)
 > var x = 3;
 > print x;
 3
