@@ -2,9 +2,9 @@
 
 use crate::ast::{expr::*, stmt::*};
 
-/// Automates double dispatches reducing `switch`
+/// Automates double dispatches reducing `match`
 pub trait ExprVisitor<T> {
-    /// Dispathes specific sub function to Expr variants.
+    /// Dispathes a specific sub function to a variant of `Expr`
     fn visit_expr(&mut self, expr: &Expr) -> T {
         use Expr::*;
         match expr {
@@ -22,6 +22,7 @@ pub trait ExprVisitor<T> {
             Self_(self_) => self.visit_self_expr(self_),
         }
     }
+    // sub functions to one of the variants of `Expr`
     fn visit_literal_expr(&mut self, literal: &LiteralData) -> T;
     fn visit_unary_expr(&mut self, unary: &UnaryData) -> T;
     fn visit_binary_expr(&mut self, binary: &BinaryData) -> T;
