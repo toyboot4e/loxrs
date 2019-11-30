@@ -315,8 +315,8 @@ fn write_instance(s: &mut String, instance: &LoxInstance) {
     write!(s, "(instance ").unwrap();
     self::write_class_obj(s, &instance.class);
     write!(s, " (").unwrap();
-    for (name, method) in instance.fields.iter() {
-        write!(s, "({} ", name).unwrap();
+    for (name, field) in instance.fields.iter() {
+        write!(s, "({} {}", name, field.pretty_print()).unwrap();
         write!(s, ")").unwrap();
     }
     write!(s, ")").unwrap();
