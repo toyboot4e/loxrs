@@ -320,6 +320,7 @@ fn write_instance(s: &mut String, instance: &LoxInstance) {
         write!(s, ")").unwrap();
     }
     write!(s, ")").unwrap();
+    write!(s, ")").unwrap();
 }
 
 fn write_class_obj(s: &mut String, class: &LoxClass) {
