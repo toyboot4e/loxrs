@@ -1,6 +1,8 @@
 use crate::bytecode::chunk::*;
 use ::std::ops;
 
+// TODO: maybe handle runtime errors in bytecode VM wihtout `expect`ing
+
 pub type Result = ::std::result::Result<(), VmInterpretError>;
 
 #[derive(Debug)]
@@ -37,11 +39,7 @@ impl Vm {
     }
 
     pub fn print_stack(&self) {
-        print!("VM stack: [ ");
-        for v in self.stack.iter() {
-            print!("{}, ", v);
-        }
-        println!("]");
+        println!("VM stack: {:?};", &self.stack);
     }
 
     pub unsafe fn run(&mut self) -> Result {
@@ -62,7 +60,7 @@ impl Vm {
                     println!("return: {:?}", x);
                     return Ok(());
                 }
-                OpConstant1Byte => {
+                OpConst1 => {
                     let idx = self.chunk.read_u8(self.ip);
                     self.ip += 1;
                     let value = self
@@ -74,7 +72,7 @@ impl Vm {
                     self.stack.push(value);
                     // println!("{}, {} => {:?}", "byte1", idx, value);
                 }
-                OpConstant2Byte => {
+                OpConst2 => {
                     let idx = self.chunk.read_u16(self.ip);
                     self.ip += 2;
                     let value = self
@@ -124,7 +122,7 @@ impl Vm {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bytecode::chunk::{OpCodeTag::*, *};
+    use crate::bytecode::chunk::OpCodeTag::*;
 
     #[test]
     fn vm_binary_oper() {
@@ -135,9 +133,9 @@ mod tests {
             // "32.2 14.2 - 9 / -" in Neverse Polish Notation
             let chunk = vm.chunk();
 
-            chunk.push_const(32.2);
-            chunk.push_const(14.2);
-            chunk.push_const(9.0);
+            chunk.store_const(32.2);
+            chunk.store_const(14.2);
+            chunk.store_const(9.0);
 
             chunk.push_idx_u8(0u8);
             chunk.push_idx_u8(1u8);

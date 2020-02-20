@@ -29,9 +29,9 @@ impl OpCode {
 pub enum OpCodeTag {
     OpReturn,
     /// Followed by an index
-    OpConstant1Byte,
+    OpConst1,
     /// Followed by an index
-    OpConstant2Byte,
+    OpConst2,
     OpNegate,
     OPAdd,
     OpSub,
@@ -56,14 +56,14 @@ pub trait Chunk {
 
     fn push_idx_u8(&mut self, x: u8) {
         self.code().push(OpCode {
-            tag: OpCodeTag::OpConstant1Byte,
+            tag: OpCodeTag::OpConst1,
         });
         self.code().push(OpCode { const_idx: x });
     }
 
     fn push_idx_u16(&mut self, x: u16) {
         self.code().push(OpCode {
-            tag: OpCodeTag::OpConstant2Byte,
+            tag: OpCodeTag::OpConst2,
         });
         self.code().push(OpCode {
             const_idx: (x >> 8) as u8,
@@ -100,7 +100,7 @@ impl ChunkData {
         &mut self.consts
     }
 
-    pub fn push_const(&mut self, value: Value) {
+    pub fn store_const(&mut self, value: Value) {
         self.consts.push(value)
     }
 }
@@ -139,7 +139,7 @@ impl DebugPrintUnsafe for ChunkData {
         let mut iter = self.code.iter().enumerate();
         while let Some((offset, code)) = iter.next() {
             match code.tag {
-                OpCodeTag::OpConstant1Byte => {
+                OpCodeTag::OpConst1 => {
                     let idx = self.read_u8(offset + 1);
                     writeln!(
                         out,
@@ -150,7 +150,7 @@ impl DebugPrintUnsafe for ChunkData {
                     .unwrap();
                     iter.next();
                 }
-                OpCodeTag::OpConstant2Byte => {
+                OpCodeTag::OpConst2 => {
                     let idx = self.read_u16(offset + 1);
                     writeln!(
                         out,
