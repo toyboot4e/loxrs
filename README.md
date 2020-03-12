@@ -1,4 +1,4 @@
-= loxrs
+# loxrs
 
 loxrs is a project to follow the book [Crafting Interpreters](https://craftinginterpreters.com/) in Rust.
 

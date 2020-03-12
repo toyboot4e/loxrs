@@ -1,10 +1,6 @@
-# loxrs
+# loxrs tree-walk interpreter
 
-Yet another hobby project to follow the book [Crafting Interpreters](http://www.craftinginterpreters.com/) in Rust.
-
-## Progress
-
-I'm doing part II (treewalk interpreter). Done: Ch.12 [Classes](https://craftinginterpreters.com/classes.html).
+Done: Ch.12 [Classes](https://craftinginterpreters.com/classes.html)
 
 ## Example
 
