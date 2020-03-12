@@ -159,6 +159,7 @@ pub enum ScanError {
     UnexpectedCharacter(char, SourcePosition),
 }
 
+// TODO: refactor using associated type
 pub struct Scanner<'a> {
     state: self::hidden::ScanState<Chars<'a>>,
 }

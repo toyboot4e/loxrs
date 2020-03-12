@@ -10,7 +10,6 @@ pub enum Expr {
     Binary(Box<BinaryData>),
     Logic(Box<LogicData>),
     Grouping(Box<GroupData>),
-    // TODO: rename me; it may be function
     Variable(VarUseData),
     /// Assignment to a variable
     Assign(Box<AssignData>),

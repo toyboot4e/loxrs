@@ -1,4 +1,4 @@
-use crate::bytecode::chunk::*;
+use crate::chunk::*;
 use ::std::ops;
 
 // TODO: maybe handle runtime errors in bytecode VM wihtout `expect`ing
@@ -122,7 +122,7 @@ impl Vm {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bytecode::chunk::OpCodeTag::*;
+    use crate::chunk::OpCodeTag::*;
 
     #[test]
     fn vm_binary_oper() {

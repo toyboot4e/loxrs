@@ -1,0 +1,15 @@
+class Vec2 {
+    fn init(x, y) {
+        @.x = x;
+        @.y = y;
+    }
+
+    fn test() {
+        // parse error! (Self_ is distinguished from an identifier)
+        print @.@.@.x;
+    }
+}
+
+var v = Vec2(10, 10);
+v.test();
+

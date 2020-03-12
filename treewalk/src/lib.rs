@@ -6,7 +6,6 @@
 
 mod analizer;
 mod ast;
-mod bytecode;
 mod lexer;
 mod runtime;
 

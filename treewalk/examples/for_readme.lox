@@ -1,3 +1,4 @@
+// loxrs example
 class Vec2 {
     fn init(x, y) {
         @.x = x;
