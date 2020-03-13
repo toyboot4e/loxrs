@@ -1,7 +1,9 @@
 pub mod chunk;
+pub mod compiler;
 pub mod vm;
 
 use crate::vm::{Vm, VmInterpretError};
+
 use std::fs;
 use std::io::{self, BufRead, BufWriter, Write};
 
