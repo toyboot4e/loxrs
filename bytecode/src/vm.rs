@@ -17,6 +17,7 @@ pub struct Vm {
     stack: Vec<Value>,
 }
 
+// stack operations
 impl Vm {
     pub fn new() -> Self {
         Self {
@@ -41,7 +42,10 @@ impl Vm {
     pub fn print_stack(&self) {
         println!("VM stack: {:?};", &self.stack);
     }
+}
 
+// interpret
+impl Vm {
     pub unsafe fn run(&mut self) -> Result {
         loop {
             let code = match self.chunk.code().get(self.ip) {
@@ -49,11 +53,13 @@ impl Vm {
                 None => break,
             };
             self.ip += 1;
+
+            {
+                // TODO: optional trace print
+                self.trace_print(code.tag());
+            }
+
             use OpCodeTag::*;
-
-            // TODO: optional trace print
-            self.trace_print(code.tag());
-
             match code.tag() {
                 OpReturn => {
                     let x = self.stack.pop();
@@ -129,6 +135,7 @@ mod tests {
         println!("=== vm_binary_oper()  ===");
         let mut vm = Vm::new();
         {
+            // write chunks
             // -((32.2 - 14.2) / 9) i.e.
             // "32.2 14.2 - 9 / -" in Neverse Polish Notation
             let chunk = vm.chunk();

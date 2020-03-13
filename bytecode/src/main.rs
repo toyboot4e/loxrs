@@ -1,3 +1,5 @@
+use bytecode;
+
 fn main() {
-    println!("Hello, world!");
+    bytecode::run_repl();
 }
