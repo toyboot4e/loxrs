@@ -1,103 +1,59 @@
-use ::std::io::prelude::*;
+use std::io::prelude::*;
 
-// TODO: can I remove `unsafe` around union?
-
-/// Operation code for the bytecode interpreter
-///
-/// Refer to the [reference](https://doc.rust-lang.org/reference/items/unions.html) about unions in
-/// Rust
-// #[derive(Debug, Clone)]
-#[repr(C)]
-pub union OpCode {
-    tag: OpCodeTag,
-    const_idx: u8,
-}
-
-impl OpCode {
-    pub unsafe fn tag(&self) -> OpCodeTag {
-        self.tag
-    }
-
-    // TODO: make it safe
-    pub unsafe fn clone(&self) -> Self {
-        std::mem::transmute::<u8, OpCode>(self.const_idx.clone())
-    }
-}
-
-// TODO: is it byte length?
 #[derive(Debug, Clone, Copy)]
-pub enum OpCodeTag {
+pub enum OpCode {
     OpReturn,
-    /// Followed by an index
-    OpConst1,
-    /// Followed by an index
-    OpConst2,
+
+    /// Followed by a byte index
+    OpConst8,
+    /// Followed by a two byte index
+    OpConst16,
+
     OpNegate,
-    OPAdd,
+    OpAdd,
     OpSub,
     OpMul,
     OpDiv,
 }
 
-impl OpCodeTag {
-    fn as_byte(&self) {
-        print!("{:b}", unsafe {
-            std::mem::transmute::<OpCodeTag, u8>(self.clone())
-        });
-    }
-}
-
-pub trait Chunk {
-    fn code(&mut self) -> &mut Vec<OpCode>;
-
-    fn push_tag(&mut self, tag: OpCodeTag) {
-        self.code().push(OpCode { tag: tag });
-    }
-
-    fn push_idx_u8(&mut self, x: u8) {
-        self.code().push(OpCode {
-            tag: OpCodeTag::OpConst1,
-        });
-        self.code().push(OpCode { const_idx: x });
-    }
-
-    fn push_idx_u16(&mut self, x: u16) {
-        self.code().push(OpCode {
-            tag: OpCodeTag::OpConst2,
-        });
-        self.code().push(OpCode {
-            const_idx: (x >> 8) as u8,
-        });
-        self.code().push(OpCode { const_idx: x as u8 });
+impl Into<u8> for OpCode {
+    fn into(self) -> u8 {
+        self as u8
     }
 }
 
 pub type Value = f64;
 
-/// Chunk of instructions / `Vec` of `OpCode`.
-///
-/// It's different from the original implementation in the book:
-///
-/// * FIXME: Capacity being initialized with zero and becomes one after pushing a first element.
-/// * No automatic shrinking
+/// Chunk of instructions (`OpCode`s)
 pub struct ChunkData {
-    code: Vec<OpCode>,
+    /// Read as `OpCode` or index
+    bytes: Vec<u8>,
     consts: Vec<Value>,
     // tracks: Vec<ChunkTrackItem>,
 }
+
 pub type ChunkCodeIndex = usize;
+pub type ChunkConstIndex = usize;
+
+pub struct ChunkTrackItem {
+    line: u32,
+}
 
 impl ChunkData {
     pub fn new() -> Self {
         Self {
-            code: Vec::new(),
+            bytes: Vec::new(),
             consts: Vec::new(),
             // tracks: Vec::new(),
         }
     }
 
-    pub fn consts(&mut self) -> &mut Vec<Value> {
-        &mut self.consts
+    pub fn bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+
+    pub fn consts(&mut self) -> &Vec<Value> {
+        &self.consts
     }
 
     pub fn store_const(&mut self, value: Value) {
@@ -105,104 +61,119 @@ impl ChunkData {
     }
 }
 
-impl Chunk for ChunkData {
-    fn code(&mut self) -> &mut Vec<OpCode> {
-        &mut self.code
+/// Read
+impl ChunkData {
+    pub fn read_u8(&self, offset: ChunkCodeIndex) -> u8 {
+        self.bytes[offset]
+    }
+
+    pub fn read_u16(&self, offset: ChunkCodeIndex) -> u16 {
+        ((self.bytes[offset] as u16) << 8) | (self.bytes[offset + 1] as u16)
     }
 }
 
-pub struct ChunkTrackItem {
-    line: u32,
+/// Write
+impl ChunkData {
+    #[inline(always)]
+    pub fn push_code(&mut self, tag: OpCode) {
+        self.bytes.push(tag as u8);
+    }
+
+    #[inline(always)]
+    pub fn push_idx_u8(&mut self, x: u8) {
+        self.bytes.push(OpCode::OpConst8 as u8);
+        self.bytes.push(x);
+    }
+
+    #[inline(always)]
+    pub fn push_idx_u16(&mut self, x: u16) {
+        self.bytes.push(OpCode::OpConst16 as u8);
+        self.bytes.push(x as u8);
+        self.bytes.push((x >> 8) as u8);
+    }
 }
 
-// *************************
-// ***** debug & tests *****
-// *************************
+// --------------------------------------------------------------------------------
+// debug & tests
 
 /// Extends `ChunkData` i.e. `Vec<OpCode>`
-pub trait DebugPrintUnsafe {
-    unsafe fn debug_print(&self, title: &str);
-    // internal utilities
-    unsafe fn read_u8(&self, offset: ChunkCodeIndex) -> u8;
-    unsafe fn read_u16(&self, offset: ChunkCodeIndex) -> u16;
+pub trait DebugPrint {
+    fn debug_print(&self, title: &str);
 }
 
-impl DebugPrintUnsafe for ChunkData {
+impl DebugPrint for ChunkData {
     /// Disassembles `ChunkData`
-    unsafe fn debug_print(&self, title: &str) {
+    fn debug_print(&self, title: &str) {
         let out = std::io::stdout();
         let out = &mut out.lock();
 
         writeln!(out, "== {} ==", title).unwrap();
+        use OpCode::*;
 
         // TODO: consider using StdoutLock
-        let mut iter = self.code.iter().enumerate();
-        while let Some((offset, code)) = iter.next() {
-            match code.tag {
-                OpCodeTag::OpConst1 => {
+        let mut iter = self.bytes.iter().enumerate();
+        while let Some((offset, &byte)) = iter.next() {
+            let code: OpCode = unsafe { std::mem::transmute(byte) };
+            match code {
+                OpConst8 => {
                     let idx = self.read_u8(offset + 1);
                     writeln!(
                         out,
                         "1 byte: idx =  {}, value = {:?}",
                         idx,
-                        self.consts.get(idx as usize)
+                        self.consts.get(idx as ChunkConstIndex)
                     )
                     .unwrap();
                     iter.next();
                 }
-                OpCodeTag::OpConst2 => {
+
+                OpConst16 => {
                     let idx = self.read_u16(offset + 1);
                     writeln!(
                         out,
                         "2 bytes: idx = {}, value = {:?}",
                         idx,
-                        self.consts.get(idx as usize)
+                        self.consts.get(idx as ChunkConstIndex)
                     )
                     .unwrap();
+
                     iter.next();
                     iter.next();
                 }
-                _ => writeln!(out, "{:?}", code.tag).unwrap(),
+
+                OpNegate | OpAdd | OpSub | OpMul | OpDiv | OpReturn => {
+                    writeln!(out, "{:?}", code).unwrap()
+                }
             }
         }
 
         out.flush().unwrap();
-    }
-
-    unsafe fn read_u8(&self, offset: ChunkCodeIndex) -> u8 {
-        self.code[offset].const_idx
-    }
-
-    unsafe fn read_u16(&self, offset: ChunkCodeIndex) -> u16 {
-        ((self.code[offset].const_idx as u16) << 8) | self.code[offset + 1].const_idx as u16
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ::std::mem;
+    use std::mem;
 
     #[test]
     fn test_memory_sizes() {
-        // each `OpCode` must have size of 1 byte
         assert_eq!(1, mem::size_of::<OpCode>());
-        assert_eq!(1, mem::size_of::<OpCodeTag>());
     }
 
-    // cargo test -- --no-capture
+    /// Not automatic test; check it with your eye
     #[test]
     fn debug_print_chunk_data() {
-        use OpCodeTag::*;
+        use OpCode::*;
+
         let mut chunk = ChunkData::new();
-        chunk.push_tag(OpReturn);
-        chunk.push_tag(OpReturn);
+        chunk.push_code(OpReturn);
+        chunk.push_code(OpReturn);
         chunk.push_idx_u8(42u8);
         chunk.push_idx_u16(600u16);
         chunk.consts.push(4124.45);
         chunk.push_idx_u8(0);
-        unsafe {
-            chunk.debug_print("tested chunk");
-        }
+
+        chunk.debug_print("test chunk");
     }
 }

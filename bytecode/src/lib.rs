@@ -2,19 +2,26 @@ pub mod chunk;
 pub mod compiler;
 pub mod vm;
 
-use crate::vm::{Vm, VmInterpretError};
+use crate::vm::{Vm, VmError};
+use std::{
+    fs,
+    io::{self, BufRead, BufWriter, Write},
+    path::Path,
+};
 
-use std::fs;
-use std::io::{self, BufRead, BufWriter, Write};
-
-type Result<T> = ::std::result::Result<T, VmInterpretError>;
+type Result<T> = ::std::result::Result<T, VmError>;
 
 pub fn interpret(s: &str) -> Result<()> {
     Ok(())
 }
 
+pub fn run_file(file: &Path) -> Result<()> {
+    let s = fs::read_to_string(file).or_else(|_| Err(VmError::RuntimeError))?;
+    self::interpret(&s)
+}
+
 pub fn run_repl() {
-    println!("Entered loxrs (bytecode) REPL (press q<Enter> or Ctrl-c to quit)");
+    println!("loxrs REPL (bytecode) [press q<Enter> or Ctrl-c to quit]");
     let prompt_str = "> ";
 
     // setting up I/O

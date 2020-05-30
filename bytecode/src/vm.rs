@@ -1,23 +1,22 @@
 use crate::chunk::*;
+use ::anyhow::{anyhow, Context, Error, Result};
 use ::std::ops;
 
-// TODO: maybe handle runtime errors in bytecode VM wihtout `expect`ing
-
-pub type Result = ::std::result::Result<(), VmInterpretError>;
-
 #[derive(Debug)]
-pub enum VmInterpretError {
+pub enum VmError {
     CompileError,
     RuntimeError,
 }
 
 pub struct Vm {
+    /// Chunk of bytecodes
     chunk: ChunkData,
+    /// Instruction "pointer" (actual raw pointer is better for efficiency)
     ip: ChunkCodeIndex,
+    /// Space for calculation
     stack: Vec<Value>,
 }
 
-// stack operations
 impl Vm {
     pub fn new() -> Self {
         Self {
@@ -27,7 +26,7 @@ impl Vm {
         }
     }
 
-    pub fn chunk(&mut self) -> &mut ChunkData {
+    pub fn chunk_mut(&mut self) -> &mut ChunkData {
         &mut self.chunk
     }
 
@@ -35,66 +34,73 @@ impl Vm {
         self.ip
     }
 
-    pub fn stack(&mut self) -> &mut Vec<Value> {
-        &mut self.stack
+    pub fn stack(&mut self) -> &Vec<Value> {
+        &self.stack
     }
+}
 
+/// Print
+impl Vm {
     pub fn print_stack(&self) {
         println!("VM stack: {:?};", &self.stack);
     }
 }
 
-// interpret
+/// Run
 impl Vm {
-    pub unsafe fn run(&mut self) -> Result {
-        loop {
-            let code = match self.chunk.code().get(self.ip) {
-                Some(c) => c.clone(),
-                None => break,
-            };
+    pub fn run(&mut self) -> Result<()> {
+        let chunk_len = self.chunk.bytes().len();
+        while self.ip < chunk_len {
+            let byte = self.chunk.read_u8(self.ip);
+
             self.ip += 1;
 
             {
                 // TODO: optional trace print
-                self.trace_print(code.tag());
+                // self.trace_print(code.tag());
             }
 
-            use OpCodeTag::*;
-            match code.tag() {
+            let code: OpCode = unsafe { std::mem::transmute(byte) };
+            use OpCode::*;
+            match code {
                 OpReturn => {
                     let x = self.stack.pop();
-                    println!("return: {:?}", x);
+                    {
+                        // TODO: optional trace print
+                        println!("return: {:?}", x);
+                    }
                     return Ok(());
                 }
-                OpConst1 => {
+
+                OpConst8 => {
                     let idx = self.chunk.read_u8(self.ip);
                     self.ip += 1;
-                    let value = self
+                    let value = *self
                         .chunk
                         .consts()
-                        .get(idx as usize)
-                        .expect("stack must always be resolved")
-                        .clone();
+                        .get(idx as ChunkConstIndex)
+                        .ok_or(anyhow!("missing index after OpConst8"))?;
                     self.stack.push(value);
                     // println!("{}, {} => {:?}", "byte1", idx, value);
                 }
-                OpConst2 => {
+
+                OpConst16 => {
                     let idx = self.chunk.read_u16(self.ip);
                     self.ip += 2;
-                    let value = self
+                    let value = *self
                         .chunk
                         .consts()
-                        .get(idx as usize)
-                        .expect("stack must always be resolved")
-                        .clone();
+                        .get(idx as ChunkConstIndex)
+                        .ok_or(anyhow!("missing index after OpConst16"))?;
                     self.stack.push(value);
                     // println!("{}, {} => {:?}", "byte2", idx, value);
                 }
+
                 OpNegate => {
                     let v = -self.stack.pop().expect("interpret OnNegate").clone();
                     self.stack.push(v);
                 }
-                OPAdd => {
+                OpAdd => {
                     self.binary_op(ops::Add::add);
                 }
                 OpSub => {
@@ -108,37 +114,33 @@ impl Vm {
                 }
             }
         }
+
         Ok(())
     }
 
     #[inline]
     fn binary_op(&mut self, oper: impl Fn(Value, Value) -> Value) {
-        let b = self.stack.pop().expect("binary_op_b");
-        let a = self.stack.pop().expect("binary_op_a");
+        let b = self.stack.pop().expect("binary_op b");
+        let a = self.stack.pop().expect("binary_op a");
         self.stack.push(oper(a, b));
-    }
-
-    fn trace_print(&self, tag: OpCodeTag) {
-        // TODO: align
-        print!("trace: {:?}; ", tag);
-        self.print_stack();
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::chunk::OpCodeTag::*;
+    use crate::chunk::OpCode::*;
 
+    /// Tests `-((32.2 - 14.2) / 9)` turns into 2
+    ///
+    /// In prefix notation, the expression is:
+    /// 32.2 14.2 - 9 / -    = 2
     #[test]
     fn vm_binary_oper() {
         println!("=== vm_binary_oper()  ===");
         let mut vm = Vm::new();
         {
-            // write chunks
-            // -((32.2 - 14.2) / 9) i.e.
-            // "32.2 14.2 - 9 / -" in Neverse Polish Notation
-            let chunk = vm.chunk();
+            let chunk = vm.chunk_mut();
 
             chunk.store_const(32.2);
             chunk.store_const(14.2);
@@ -146,18 +148,20 @@ mod tests {
 
             chunk.push_idx_u8(0u8);
             chunk.push_idx_u8(1u8);
-            chunk.push_tag(OpSub);
+            chunk.push_code(OpSub);
 
             chunk.push_idx_u16(2u16);
-            chunk.push_tag(OpDiv);
+            chunk.push_code(OpDiv);
 
-            chunk.push_tag(OpNegate);
-            chunk.push_tag(OpReturn);
+            chunk.push_code(OpNegate);
+
+            chunk.push_code(OpReturn);
         }
-        unsafe {
-            if let Err(why) = vm.run() {
-                eprintln!("{:?}", why);
-            }
+
+        if let Err(why) = vm.run() {
+            eprintln!("{:?}", why);
+        } else {
+            assert_eq!(Some(&2f64), vm.stack().last());
         }
     }
 }
