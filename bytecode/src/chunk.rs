@@ -1,5 +1,6 @@
 use std::io::prelude::*;
 
+/// Operation code to the virtual machine
 #[derive(Debug, Clone, Copy)]
 pub enum OpCode {
     OpReturn,
@@ -22,12 +23,22 @@ impl Into<u8> for OpCode {
     }
 }
 
+/// An upcasted byte in `ChunkData`
+#[derive(Clone, Copy)]
+#[repr(C)]
+pub union ChunkByte {
+    byte: u8,
+    code: OpCode,
+}
+
+/// Constant value (it's f64 for now)
 pub type Value = f64;
 
 /// Chunk of instructions (`OpCode`s)
 pub struct ChunkData {
-    /// Read as `OpCode` or index
-    bytes: Vec<u8>,
+    /// Upcated bytes
+    bytes: Vec<ChunkByte>,
+    /// Constant values stored
     consts: Vec<Value>,
     // tracks: Vec<ChunkTrackItem>,
 }
@@ -48,7 +59,8 @@ impl ChunkData {
         }
     }
 
-    pub fn bytes(&self) -> &[u8] {
+    /// Upcasted bytes
+    pub fn bytes(&self) -> &[ChunkByte] {
         &self.bytes
     }
 
@@ -64,32 +76,42 @@ impl ChunkData {
 /// Read
 impl ChunkData {
     pub fn read_u8(&self, offset: ChunkCodeIndex) -> u8 {
-        self.bytes[offset]
+        unsafe { self.bytes[offset].byte }
+    }
+
+    pub fn read_code(&self, offset: ChunkCodeIndex) -> OpCode {
+        unsafe { self.bytes[offset].code }
     }
 
     pub fn read_u16(&self, offset: ChunkCodeIndex) -> u16 {
-        ((self.bytes[offset] as u16) << 8) | (self.bytes[offset + 1] as u16)
+        unsafe { ((self.bytes[offset].byte as u16) << 8) | (self.bytes[offset + 1].byte as u16) }
     }
 }
 
 /// Write
 impl ChunkData {
     #[inline(always)]
-    pub fn push_code(&mut self, tag: OpCode) {
-        self.bytes.push(tag as u8);
+    pub fn push_code(&mut self, code: OpCode) {
+        self.bytes.push(ChunkByte { code });
     }
 
     #[inline(always)]
     pub fn push_idx_u8(&mut self, x: u8) {
-        self.bytes.push(OpCode::OpConst8 as u8);
-        self.bytes.push(x);
+        self.bytes.push(ChunkByte {
+            code: OpCode::OpConst8,
+        });
+        self.bytes.push(ChunkByte { byte: x });
     }
 
     #[inline(always)]
     pub fn push_idx_u16(&mut self, x: u16) {
-        self.bytes.push(OpCode::OpConst16 as u8);
-        self.bytes.push(x as u8);
-        self.bytes.push((x >> 8) as u8);
+        self.bytes.push(ChunkByte {
+            code: OpCode::OpConst16,
+        });
+        self.bytes.push(ChunkByte { byte: x as u8 });
+        self.bytes.push(ChunkByte {
+            byte: (x >> 8) as u8,
+        });
     }
 }
 
@@ -113,7 +135,7 @@ impl DebugPrint for ChunkData {
         // TODO: consider using StdoutLock
         let mut iter = self.bytes.iter().enumerate();
         while let Some((offset, &byte)) = iter.next() {
-            let code: OpCode = unsafe { std::mem::transmute(byte) };
+            let code: OpCode = unsafe { byte.code };
             match code {
                 OpConst8 => {
                     let idx = self.read_u8(offset + 1);
