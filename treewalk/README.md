@@ -36,7 +36,7 @@ $ cargo run -- examples/for_readme.lox
 
 ### Debug output of AST
 
-When `-d` or `--debug` is specified, you get debug output. It contains a pretty-printed AST:
+When `-d` or `--debug` is specified, you get debug output, which contains a pretty-printed AST:
 
 ```sh
 $ cargo run -- examples/for_readme.lox --debug | sed -n '/^===== AST/,/^$/p'
@@ -55,6 +55,8 @@ $ cargo run -- examples/for_readme.lox --debug | sed -n '/^===== AST/,/^$/p'
 
 ### REPL
 
+Of cource we also have a read–eval–print loop:
+
 ```sh
 $ cargo run
 Entered loxrs REPL (press q<Enter> or Ctrl-c to quit)
@@ -67,22 +69,21 @@ Entered loxrs REPL (press q<Enter> or Ctrl-c to quit)
 ## Layout of the source code
 
 ```sh
-$ cd src; tree
-.
+src
 ├── analizer
-│   ├── mod.rs
-│   └── resolver.rs
+│   ├── mod.rs
+│   └── resolver.rs
 ├── ast
-│   ├── expr.rs
-│   ├── mod.rs
-│   ├── pretty_printer.rs
-│   ├── stmt.rs
-│   └── visitor.rs
+│   ├── expr.rs
+│   ├── mod.rs
+│   ├── pretty_printer.rs
+│   ├── stmt.rs
+│   └── visitor.rs
 ├── lexer
-│   ├── mod.rs
-│   ├── parser.rs
-│   ├── scanner.rs
-│   └── token.rs
+│   ├── mod.rs
+│   ├── parser.rs
+│   ├── scanner.rs
+│   └── token.rs
 ├── lib.rs
 ├── main.rs
 └── runtime
@@ -92,39 +93,33 @@ $ cd src; tree
     └── obj.rs
 
 4 directories, 17 files
-
 ```
 
 ## Notes on the implementation
 
+### Dependent crates
+
+* [itertools](https://github.com/rust-itertools/itertools) to multipeek
+
+I would use [thiserror](https://github.com/dtolnay/thiserror) if I refactor.
+
 ### Differences from the original Lox
 
-- Change: variable declaration requires initial value expression 
-- Change: `while` without parentheses 
-- Change: `return` is dealt as `Ok(Some(LoxObj))`, not as an exception 
-- Skipped: `for` statement (maybe make range-based one instead later) 
-- Skipped: forbidding to return something from a constructor 
+- implementation 
+    - `return` is dealt as `Ok(Some(LoxObj))`, not as an exception 
+- design 
+    - variable declaration requires initial value expression 
+    - `while` without parentheses 
 
-### Rust specigic tips (for me)
+#### Skipped
 
-- structuring 
-    - visualizing dependencies and decoupling the runtime (treewalk) from the lexer 
-- lexer (both scanner and parser, in this repository) 
-    - binary-based source iterator like ron? 
-    - using [itertools](https://docs.rs/itertools/0.8.0/itertools/)::multipeek for Scanner 
-    - using [Box](https://doc.rust-lang.org/std/boxed/struct.Box.html) to make `struct`s [Sized](https://doc.rust-lang.org/std/marker/trait.Sized.html) 
-        - where to place `Box`?: in a super node (I chose) or sub nodes? 
-    - right recursive parsing with higher order functions 
-        - efficiency? 
-- runtime (treewalk) 
-    - using visitor pattern vs just `match` to AST 
-    - using concrete types rather than wrapping them with a `Stmt` 
+- there's no `for` statement (maybe make range-based one instead later) 
+- can't `return` from a constructor 
 
 ## TODO
 
 - Challenges
-- Better error context
-- Add `+=` etc.
-- Better REPL
 - Ch. 13 (inheritance)
+- Better error context
+- Add `+=` `-=` etc.
 
