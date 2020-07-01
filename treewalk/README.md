@@ -2,6 +2,12 @@
 
 Done: Ch.12 [Classes](https://craftinginterpreters.com/classes.html)
 
+## Note
+
+I refactored a bit, but still this is a terrible implementation.
+
+It would be easier to just slice an input string and that's actually done in Chapter 3 of the book.
+
 ## Example
 
 ### Runnning a File
@@ -76,21 +82,22 @@ I would use [thiserror](https://github.com/dtolnay/thiserror) if I refactor.
 
 ### Differences from the original Lox
 
-- implementation 
-    - `return` is dealt as `Ok(Some(LoxObj))`, not as an exception 
-- design 
-    - variable declaration requires initial value expression 
-    - `while` without parentheses 
+- implementation
+    - `return` is dealt as `Ok(Some(LoxObj))`, not as an exception
+- design
+    - variable declaration requires initial value expression
+    - `while` without parentheses
 
 #### Skipped
 
-- there's no `for` statement (maybe make range-based one instead later) 
-- can't `return` from a constructor 
+- there's no `for` statement (maybe make range-based one instead later)
+- can't `return` from a constructor
 
 ## TODO
 
+I won't do but these are left:
+
 - Challenges
 - Ch. 13 (inheritance)
-- Better error context
+- Better error context (source position tracking and error chain)
 - Add `+=` `-=` etc.
-

@@ -1,7 +1,29 @@
+// maybe I should use `ByteSpan` and it comes in bytecode interpreter
+
+pub struct Token {
+    // TODO: rename to kind
+    pub kind: TokenKind,
+    pub pos: Location,
+    pub lexeme: String,
+}
+
+impl Token {
+    pub fn new(kind: TokenKind, pos: Location, lexeme: String) -> Self {
+        Self {
+            kind: kind,
+            pos: pos,
+            // Required?
+            lexeme: lexeme,
+        }
+    }
+}
+
+// TODO: use newtype (struct Identifier(String))
 pub type Identifier = String;
 
+/// Does NOT have `EoF` as a kind
 #[derive(Clone, Debug, PartialEq)]
-pub enum Token {
+pub enum TokenKind {
     // single character tokens
     LeftParen,
     RightParen,
@@ -20,18 +42,18 @@ pub enum Token {
 
     // one or more character tokens
     Bang,
-    BangEqual,
-    Equal,
-    EqualEqual,
+    BangEq,
+    Eq,
+    EqEq,
     Greater,
-    GreaterEqual,
+    GreaterEq,
     Less,
-    LessEqual,
+    LessEq,
 
-    Identifier(Identifier),
-    // literals
-    String(String),
-    Number(f64),
+    Ident(Identifier),
+    // yeah this is terrible
+    Str(String),
+    Num(f64),
 
     // keywords
     And,
@@ -50,75 +72,54 @@ pub enum Token {
     True,
     Var,
     While,
-
-    Eof,
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct SourcePosition {
-    line: usize,
-    column: usize,
+pub struct Location {
+    ln: usize,
+    col: usize,
 }
 
-impl SourcePosition {
+impl Location {
     pub fn initial() -> Self {
         Self::new(1, 1)
     }
 
     pub fn new(line: usize, column: usize) -> Self {
         Self {
-            line: line,
-            column: column,
+            ln: line,
+            col: column,
         }
     }
 
-    pub fn line(&self) -> usize {
-        self.line
+    pub fn ln(&self) -> usize {
+        self.ln
     }
 
-    pub fn column(&self) -> usize {
-        self.column
+    pub fn col(&self) -> usize {
+        self.col
     }
 
-    pub fn inc_line(&mut self) {
-        self.line += 1;
+    pub fn inc_ln(&mut self) {
+        self.ln += 1;
     }
 
-    pub fn inc_column(&mut self) {
-        self.column += 1;
+    pub fn inc_col(&mut self) {
+        self.col += 1;
     }
 
-    pub fn init_column(&mut self) {
-        self.column = 1;
-    }
-}
-
-/// [`Token`] in source code. Often referred to as `s_token`
-pub struct SourceToken {
-    // TODO: rename to kind
-    pub token: Token,
-    pub pos: SourcePosition,
-    pub lexeme: String,
-}
-
-impl SourceToken {
-    pub fn new(token: Token, pos: SourcePosition, lexeme: String) -> Self {
-        Self {
-            token: token,
-            pos: pos,
-            // Required?
-            lexeme: lexeme,
-        }
+    pub fn init_col(&mut self) {
+        self.col = 1;
     }
 }
 
 use std::fmt::{Debug, Formatter, Result};
-impl Debug for SourceToken {
+impl Debug for Token {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         write!(
             f,
             r##"{:3}:{:3}  {:?} ["{}"]"##,
-            self.pos.line, self.pos.column, self.token, self.lexeme
+            self.pos.ln, self.pos.col, self.kind, self.lexeme
         )
     }
 }

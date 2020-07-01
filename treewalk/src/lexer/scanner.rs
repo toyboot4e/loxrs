@@ -1,33 +1,40 @@
-use crate::lexer::token::{SourcePosition, SourceToken, Token};
+//! Scanner, tokenizer or lexer
+
+use crate::lexer::token::{Location, Token, TokenKind};
 use std::str::Chars;
 
-mod hidden {
-    //! Hides fields in `ScanState`
-    use itertools::{multipeek, MultiPeek};
+// This is a VERY BAD scanner.
+// Maybe I should use `ByteSpan` and it comes in bytecode interpreter
 
-    use crate::lexer::token::SourcePosition;
+mod hidden {
+    //! Hides fields of `ScanState`
+
+    use crate::lexer::token::Location;
+    use itertools::{multipeek, MultiPeek};
     use std::str::Chars;
 
-    pub struct ScanState<I>
+    // actually I should use `ByteReader`
+    /// Trackable `char` reader
+    pub struct CharReader<I>
     where
         I: Iterator<Item = char>,
     {
         src: MultiPeek<I>,
-        pos: SourcePosition,
+        pos: Location,
         lexeme: String,
     }
 
-    impl<'a> ScanState<Chars<'a>> {
+    impl<'a> CharReader<Chars<'a>> {
         pub fn new(s: &'a str) -> Self {
-            ScanState {
+            CharReader {
                 src: multipeek(s.chars()),
-                pos: SourcePosition::initial(),
+                pos: Location::initial(),
                 lexeme: String::new(),
             }
         }
     }
 
-    impl<I> Iterator for ScanState<I>
+    impl<I> Iterator for CharReader<I>
     where
         I: Iterator<Item = char>,
     {
@@ -38,11 +45,11 @@ mod hidden {
                 self.lexeme.push(c);
                 match c {
                     '\n' => {
-                        self.pos.inc_line();
-                        self.pos.init_column();
+                        self.pos.inc_ln();
+                        self.pos.init_col();
                     }
                     _ => {
-                        self.pos.inc_column();
+                        self.pos.inc_col();
                     }
                 };
             }
@@ -50,11 +57,11 @@ mod hidden {
         }
     }
 
-    impl<I> ScanState<I>
+    impl<I> CharReader<I>
     where
         I: Iterator<Item = char>,
     {
-        pub fn pos(&self) -> SourcePosition {
+        pub fn pos(&self) -> Location {
             self.pos
         }
 
@@ -77,25 +84,10 @@ mod hidden {
     }
 
     /// Mutation-based iterational methods
-    impl<I> ScanState<I>
+    impl<I> CharReader<I>
     where
         I: Iterator<Item = char>,
     {
-        pub fn next_if<P>(&mut self, predicate: P) -> Option<char>
-        where
-            P: Fn(&char) -> bool,
-        {
-            if let Some(c) = self.peek() {
-                if predicate(c) {
-                    self.next()
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        }
-
         // TODO: char vs &char
         /// Advances if the next character is `c`
         pub fn consume_char(&mut self, c: char) -> bool {
@@ -153,15 +145,14 @@ mod char_ext {
 type Result<T> = std::result::Result<T, ScanError>;
 #[derive(Debug, Clone)]
 pub enum ScanError {
-    UnterminatedString(SourcePosition),
-    UnterminatedComment(SourcePosition),
-    UnexpectedEof(SourcePosition),
-    UnexpectedCharacter(char, SourcePosition),
+    UnterminatedString(Location),
+    UnterminatedRangeComment(Location),
+    UnexpectedEof(Location),
+    UnexpectedCharacter(char, Location),
 }
 
-// TODO: refactor using associated type
 pub struct Scanner<'a> {
-    state: self::hidden::ScanState<Chars<'a>>,
+    chars: self::hidden::CharReader<Chars<'a>>,
 }
 
 /// Scanner implementation
@@ -169,151 +160,159 @@ impl<'a> Scanner<'a> {
     // TODO: make Scanner not to be owned
     pub fn new(src: &'a str) -> Self {
         Self {
-            state: self::hidden::ScanState::new(src),
+            chars: self::hidden::CharReader::new(src),
         }
     }
 
-    // FIXME: lexemes are not always necessary
-    fn add_context(&mut self, token: Token, pos: SourcePosition) -> SourceToken {
-        SourceToken::new(token, pos, self.state.lexeme().to_string())
+    fn add_context(&mut self, token: TokenKind, pos: Location) -> Token {
+        Token::new(token, pos, self.chars.lexeme().to_string())
     }
 
     /// Tokenizes a string
-    pub fn scan(&mut self) -> (Vec<SourceToken>, Vec<ScanError>) {
-        let mut tokens = Vec::<SourceToken>::new();
-        let mut errors = Vec::<ScanError>::new();
+    pub fn scan(&mut self) -> (Vec<Token>, Vec<ScanError>) {
+        let mut tks = Vec::<Token>::new();
+        let mut errs = Vec::<ScanError>::new();
         loop {
-            let pos = self.state.pos();
-            if let Some(result) = self.scan_token() {
-                match result {
-                    Ok(Token::Eof) => {
-                        break;
-                    }
-                    Ok(token) => {
-                        tokens.push(self.add_context(token, pos));
-                    }
-                    Err(why) => {
-                        errors.push(why);
-                    }
+            let pos = self.chars.pos();
+            match self.next_token() {
+                Ok(Some(tk)) => {
+                    tks.push(self.add_context(tk, pos));
                 }
-            };
+                Ok(None) => {
+                    // EoF
+                    break;
+                }
+                Err(why) => {
+                    errs.push(why);
+                }
+            }
         }
 
-        return (tokens, errors);
+        return (tks, errs);
     }
 
-    /// EoF is `Some(Ok(Token::EoF))`. Returns None for tokens to be discarded
-    fn scan_token(&mut self) -> Option<Result<Token>> {
-        use Token::*;
-        // TODO: reduce unncessary lexemes for tokens
-        // TODO: more efficient lexeme usage
-        self.state.clear_lexeme();
+    fn next_token(&mut self) -> Result<Option<TokenKind>> {
+        loop {
+            self.chars.clear_lexeme();
 
-        let c = match self.state.next() {
-            None => return Some(Ok(Eof)),
-            Some(x) => x,
-        };
+            let c = match self.chars.next() {
+                None => return Ok(None),
+                Some(x) => x,
+            };
 
-        Some(match c {
-            // single character token
-            '(' => Ok(LeftParen),
-            ')' => Ok(RightParen),
-            '{' => Ok(LeftBrace),
-            '}' => Ok(RightBrace),
-            ',' => Ok(Comma),
-            '.' => Ok(Dot),
-            '+' => Ok(Plus),
-            '-' => Ok(Minus),
-            ';' => Ok(Semicolon),
-            '*' => Ok(Star),
-            '@' => Ok(Self_),
-            // comparison
-            '!' => self.scan_cmp('=', BangEqual, Bang),
-            '=' => self.scan_cmp('=', EqualEqual, Equal),
-            '<' => self.scan_cmp('=', LessEqual, Less),
-            '>' => self.scan_cmp('=', GreaterEqual, Greater),
-            // commenting or division
-            '/' => return self.scan_slash(),
-            // logic
-            '|' => self.scan_logic('|', Or),
-            '&' => self.scan_logic('&', And),
-            // FIXME: use goto not `return`
-            ' ' | '\r' | '\t' | '\n' => return None,
-            // literals
-            '"' => self.scan_string(),
-            c if char_ext::is_digit(c) => self.scan_number(),
-            // identifier or multi character token
-            c if char_ext::is_alpha(c) => self.scan_identifier(),
-            // else
-            _ => Err(ScanError::UnexpectedCharacter(c, self.state.pos())),
-        })
+            use TokenKind::*;
+            return Ok(Some(match c {
+                // single character token
+                '(' => LeftParen,
+                ')' => RightParen,
+                '{' => LeftBrace,
+                '}' => RightBrace,
+                ',' => Comma,
+                '.' => Dot,
+                '+' => Plus,
+                '-' => Minus,
+                ';' => Semicolon,
+                '*' => Star,
+                '@' => Self_,
+
+                // comparison
+                '!' => self.scan_cmp('=', BangEq, Bang)?,
+                '=' => self.scan_cmp('=', EqEq, Eq)?,
+                '<' => self.scan_cmp('=', LessEq, Less)?,
+                '>' => self.scan_cmp('=', GreaterEq, Greater)?,
+
+                // commenting or division
+                '/' => {
+                    self.scan_slash()?;
+                    continue;
+                }
+
+                // logic
+                '|' => self.scan_logic('|', Or)?,
+                '&' => self.scan_logic('&', And)?,
+
+                // whitespace
+                ' ' | '\r' | '\t' | '\n' => continue,
+
+                // literals
+                '"' => self.scan_string()?,
+                c if char_ext::is_digit(c) => self.scan_number()?,
+                c if char_ext::is_alpha(c) => self.scan_kwd_or_ident()?,
+
+                _ => return Err(ScanError::UnexpectedCharacter(c, self.chars.pos())),
+            }));
+        }
     }
 
-    fn scan_cmp(&mut self, expected: char, if_true: Token, if_false: Token) -> Result<Token> {
-        self.state
+    fn scan_cmp(
+        &mut self,
+        expected: char,
+        if_true: TokenKind,
+        if_false: TokenKind,
+    ) -> Result<TokenKind> {
+        self.chars
             .peek()
             .map(|c| c.clone())
             .map(|c| {
                 if c == expected {
-                    self.state.next();
+                    self.chars.next();
                     if_true
                 } else {
                     if_false
                 }
             })
-            .ok_or_else(|| ScanError::UnexpectedEof(self.state.pos()))
+            .ok_or_else(|| ScanError::UnexpectedEof(self.chars.pos()))
     }
 
-    fn scan_logic(&mut self, expected: char, if_true: Token) -> Result<Token> {
-        match self.state.next() {
+    /// Expect one `char` and then return the `TokenKind` for it
+    fn scan_logic(&mut self, expected: char, if_true: TokenKind) -> Result<TokenKind> {
+        match self.chars.next() {
             Some(c) if c == expected => Ok(if_true),
-            Some(c) => Err(ScanError::UnexpectedCharacter(c, self.state.pos())),
-            None => Err(ScanError::UnexpectedEof(self.state.pos())),
+            Some(c) => Err(ScanError::UnexpectedCharacter(c, self.chars.pos())),
+            None => Err(ScanError::UnexpectedEof(self.chars.pos())),
         }
     }
 
-    fn scan_slash(&mut self) -> Option<Result<Token>> {
-        if self.state.consume_char('/') {
-            self.state.advance_until(|c| c == '\n');
-            None // should care about EoF?
-        } else if self.state.consume_char('*') {
-            if let Err(why) = self.scan_multiline_comment() {
-                Some(Err(why))
-            } else {
-                None
-            }
+    /// slash (`Ok(TokenKind::Slash)`), comment (`Ok(None)`) or `Err`
+    fn scan_slash(&mut self) -> Result<Option<TokenKind>> {
+        if self.chars.consume_char('/') {
+            self.chars.advance_until(|c| c == '\n');
+            Ok(None)
+        } else if self.chars.consume_char('*') {
+            self.scan_range_comment().map(|_| None)
         } else {
-            Some(Ok(Token::Slash))
+            Ok(Some(TokenKind::Slash))
         }
     }
 
-    fn scan_multiline_comment(&mut self) -> Result<()> {
-        while let Some(c) = self.state.next() {
+    fn scan_range_comment(&mut self) -> Result<()> {
+        // TODO: consider escape
+        while let Some(c) = self.chars.next() {
             if c == '*' {
-                if self.state.consume_char('/') {
+                if self.chars.consume_char('/') {
                     return Ok(());
                 }
             }
             // nestable
             if c == '/' {
-                if self.state.consume_char('*') {
-                    self.scan_multiline_comment()?;
+                if self.chars.consume_char('*') {
+                    self.scan_range_comment()?;
                 }
             }
         }
-        Err(ScanError::UnterminatedComment(self.state.pos()))
+        Err(ScanError::UnterminatedRangeComment(self.chars.pos()))
     }
 
-    // TODO: enable rich enclosure such as ###"
+    // TODO: enable rich enclosure such as r#"raw_string"#
     // TODO: enable escapes
-    fn scan_string(&mut self) -> Result<Token> {
+    fn scan_string(&mut self) -> Result<TokenKind> {
         loop {
-            match self.state.next() {
-                None => return Err(ScanError::UnterminatedString(self.state.pos())),
+            match self.chars.next() {
+                None => return Err(ScanError::UnterminatedString(self.chars.pos())),
                 Some('"') => {
-                    // remove both " characters
-                    return Ok(Token::String(
-                        self.state.lexeme()[1..self.state.lexeme().len() - 1].to_string(),
+                    // strip " characters
+                    return Ok(TokenKind::Str(
+                        self.chars.lexeme()[1..self.chars.lexeme().len() - 1].to_string(),
                     ));
                 }
                 _ => {}
@@ -321,32 +320,32 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    // disabled: a leading or trailing decimal point
-    // TODO: enabling comma deliminated numbers
-    fn scan_number(&mut self) -> Result<Token> {
-        self.state.advance_while(&char_ext::is_digit);
-        if self.state.peek() == Some(&'.') {
-            match self.state.peek_next() {
+    // a leading or trailing decimal point is disabled
+    // TODO: enabling comma or underline deliminated numbers
+    fn scan_number(&mut self) -> Result<TokenKind> {
+        self.chars.advance_while(&char_ext::is_digit);
+        if self.chars.peek() == Some(&'.') {
+            match self.chars.peek_next() {
                 Some(&c) if char_ext::is_digit(c) => {
-                    self.state.next();
-                    self.state.advance_while(&char_ext::is_digit);
+                    self.chars.next();
+                    self.chars.advance_while(&char_ext::is_digit);
                 }
                 _ => {}
             }
         }
 
-        let n = self.state.lexeme().parse().expect(&format!(
+        let n = self.chars.lexeme().parse().expect(&format!(
             "scan_number parsing error for {}",
-            self.state.lexeme()
+            self.chars.lexeme()
         ));
-        return Ok(Token::Number(n));
+        return Ok(TokenKind::Num(n));
     }
 
     /// Scans an identifier or a reserved word.
-    fn scan_identifier(&mut self) -> Result<Token> {
-        self.state.advance_while(&char_ext::is_alphanumeric);
-        use Token::*;
-        Ok(match self.state.lexeme().as_ref() {
+    fn scan_kwd_or_ident(&mut self) -> Result<TokenKind> {
+        self.chars.advance_while(&char_ext::is_alphanumeric);
+        use TokenKind::*;
+        Ok(match self.chars.lexeme().as_ref() {
             "and" => And,
             "class" => Class,
             "else" => Else,
@@ -362,7 +361,7 @@ impl<'a> Scanner<'a> {
             "true" => True,
             "var" => Var,
             "while" => While,
-            name => Identifier(name.to_string()),
+            name => Ident(name.to_string()),
         })
     }
 }

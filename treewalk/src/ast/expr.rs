@@ -1,4 +1,4 @@
-use crate::lexer::token::Token;
+use crate::lexer::token::TokenKind;
 use std::convert::From;
 
 // We need to make `Expr` hashable so that we can map `Expr` to distance
@@ -100,14 +100,14 @@ pub enum LiteralData {
 
 impl LiteralData {
     /// Maps specific tokens to `Option::Some(LiteralData)`
-    pub fn from_token(token: &Token) -> Option<LiteralData> {
-        use Token::*;
+    pub fn from_token(token: &TokenKind) -> Option<LiteralData> {
+        use TokenKind::*;
         Some(match token {
             Nil => LiteralData::Nil,
             True => LiteralData::Bool(true),
             False => LiteralData::Bool(false),
-            String(ref s) => LiteralData::StringLit(s.clone()),
-            Number(n) => LiteralData::Number(n.clone()),
+            Str(ref s) => LiteralData::StringLit(s.clone()),
+            Num(n) => LiteralData::Number(n.clone()),
             _ => return None,
         })
     }
@@ -144,9 +144,9 @@ pub enum UnaryOper {
     Minus,
 }
 
-impl From<Token> for Option<UnaryOper> {
-    fn from(item: Token) -> Self {
-        use Token::*;
+impl From<TokenKind> for Option<UnaryOper> {
+    fn from(item: TokenKind) -> Self {
+        use TokenKind::*;
         Some(match item {
             Bang => UnaryOper::Not,
             Minus => UnaryOper::Minus,
@@ -186,20 +186,20 @@ impl BinaryOper {
     }
 }
 
-impl From<Token> for Option<BinaryOper> {
-    fn from(item: Token) -> Self {
-        use Token::*;
+impl From<TokenKind> for Option<BinaryOper> {
+    fn from(item: TokenKind) -> Self {
+        use TokenKind::*;
         Some(match item {
             Minus => BinaryOper::Minus,
             Plus => BinaryOper::Plus,
             Star => BinaryOper::Mul,
             Slash => BinaryOper::Div,
-            EqualEqual => BinaryOper::Equal,
-            BangEqual => BinaryOper::NotEqual,
+            EqEq => BinaryOper::Equal,
+            BangEq => BinaryOper::NotEqual,
             Less => BinaryOper::Less,
-            LessEqual => BinaryOper::LessEqual,
+            LessEq => BinaryOper::LessEqual,
             Greater => BinaryOper::Greater,
-            GreaterEqual => BinaryOper::GreaterEqual,
+            GreaterEq => BinaryOper::GreaterEqual,
             _ => return None,
         })
     }
@@ -219,9 +219,9 @@ pub enum LogicOper {
     And,
 }
 
-impl From<Token> for Option<LogicOper> {
-    fn from(item: Token) -> Self {
-        use Token::*;
+impl From<TokenKind> for Option<LogicOper> {
+    fn from(item: TokenKind) -> Self {
+        use TokenKind::*;
         Some(match item {
             Or => LogicOper::Or,
             And => LogicOper::And,
@@ -299,11 +299,11 @@ pub enum AssignOper {
     Equal,
 }
 
-impl From<Token> for Option<AssignOper> {
-    fn from(item: Token) -> Self {
-        use Token::*;
+impl From<TokenKind> for Option<AssignOper> {
+    fn from(item: TokenKind) -> Self {
+        use TokenKind::*;
         Some(match item {
-            Equal => AssignOper::Equal,
+            Eq => AssignOper::Equal,
             _ => return None,
         })
     }
