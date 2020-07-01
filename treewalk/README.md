@@ -6,7 +6,7 @@ Done: Ch.12 [Classes](https://craftinginterpreters.com/classes.html)
 
 I refactored a bit, but still this is a terrible implementation.
 
-It would be easier to just slice an input string and that's actually done in Chapter 3 of the book.
+It would be easier to just slice an input string and that's actually done in the Part 3 of the book.
 
 ## Example
 
@@ -72,13 +72,12 @@ Entered loxrs REPL (press q<Enter> or Ctrl-c to quit)
 >
 ```
 
-## Notes on the implementation
+## Notes
 
 ### Dependent crates
 
 * [itertools](https://github.com/rust-itertools/itertools) to multipeek
-
-I would use [thiserror](https://github.com/dtolnay/thiserror) if I refactor.
+* [anyhow](https://crates.io/crates/anyhow) and [thiserror](https://github.com/dtolnay/thiserror) for CLI error handling
 
 ### Differences from the original Lox
 

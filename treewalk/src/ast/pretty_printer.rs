@@ -3,9 +3,8 @@
 use crate::ast::{expr::*, stmt::*};
 use std::fmt::Write;
 
-// *****************************
-// ***** Pretty print Stmt *****
-// *****************************
+// --------------------------------------------------------------------------------
+// Pretty print `Stmt`
 
 impl PrettyPrint for Stmt {
     fn pretty_print(&self) -> String {
@@ -119,9 +118,8 @@ pub fn write_if(s: &mut String, indent: isize, if_: &IfArgs) {
     }
 }
 
-// ****************************
-// ***** Pretty print AST *****
-// ****************************
+// --------------------------------------------------------------------------------
+// Pretty print AST
 
 pub fn pretty_vec(xs: impl IntoIterator<Item = impl ::std::fmt::Display>) -> String {
     format!(
