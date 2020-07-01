@@ -1,8 +1,8 @@
 use crate::ast::stmt::{FnDeclArgs, Params};
 use crate::ast::{expr::*, stmt::*};
 use crate::lexer::token::*;
-use ::std::iter::Peekable;
-use ::std::rc::Rc;
+use std::iter::Peekable;
+use std::rc::Rc;
 
 type Result<T> = std::result::Result<T, ParseError>;
 

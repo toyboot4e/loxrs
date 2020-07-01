@@ -1,6 +1,7 @@
-fn main() {
-    ::env_logger::init();
+use loxrs::cli;
 
-    let cli = loxrs::parse_args();
-    cli.run();
+fn main() -> cli::Result<()> {
+    env_logger::init();
+    let cli = cli::parse()?;
+    cli.run()
 }

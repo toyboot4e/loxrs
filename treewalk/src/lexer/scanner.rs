@@ -3,7 +3,7 @@ use std::str::Chars;
 
 mod hidden {
     //! Hides fields in `ScanState`
-    use ::itertools::{multipeek, MultiPeek};
+    use itertools::{multipeek, MultiPeek};
 
     use crate::lexer::token::SourcePosition;
     use std::str::Chars;

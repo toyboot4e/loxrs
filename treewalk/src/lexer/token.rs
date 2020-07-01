@@ -112,7 +112,7 @@ impl SourceToken {
     }
 }
 
-use ::std::fmt::{Debug, Formatter, Result};
+use std::fmt::{Debug, Formatter, Result};
 impl Debug for SourceToken {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         write!(

@@ -1,19 +1,25 @@
 use crate::ast::{expr::*, stmt::*, ExprVisitor, StmtVisitor};
-use ::std::collections::HashMap;
+use std::collections::HashMap;
 
 // TODO: consider using macros to implement Resolver
 
 type Result<T> = ::std::result::Result<T, SemantcicError>;
+use thiserror::Error;
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum SemantcicError {
     // TODO: reporst soure position
+    #[error("undefined variable: \"{0}\"")]
     Undefined(String),
     // TODO: separate recursive declaration error
+    #[error("duplicate declaration: \"{0}\"")]
     DuplicateDeclaration(String),
     // TODO: better context (consider assining to tuple with pattern match)
+    #[error("recursive variable declaration: \"{0}\"")]
     RecursiveVariableDeclaration(String),
+    #[error("return from non-function")]
     ReturnFromNonFunction,
+    #[error("use of `self` outsie method")]
     UseOfSelfOutsideMethod,
 }
 

@@ -1,5 +1,5 @@
 use crate::ast::expr::Expr;
-use ::std::rc::Rc;
+use std::rc::Rc;
 
 // TODO: use proper places for function definitions
 pub type Params = Vec<String>;

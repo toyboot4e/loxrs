@@ -1,7 +1,7 @@
 //! Prints expression/statement in a pretty format
 
 use crate::ast::{expr::*, stmt::*};
-use ::std::fmt::Write;
+use std::fmt::Write;
 
 // *****************************
 // ***** Pretty print Stmt *****

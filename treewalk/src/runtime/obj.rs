@@ -6,10 +6,10 @@ use crate::ast::{
     stmt::{ClassDeclArgs, FnDeclArgs, Params, Stmt},
 };
 use crate::runtime::{env::Env, Result, RuntimeError};
-use ::std::cell::RefCell;
-use ::std::collections::HashMap;
-use ::std::fmt::Write;
-use ::std::rc::Rc;
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::fmt::Write;
+use std::rc::Rc;
 
 /// Runtime object which represents anything
 #[derive(Clone, Debug)]

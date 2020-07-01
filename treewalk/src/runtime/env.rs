@@ -1,7 +1,7 @@
 use crate::runtime::{obj::LoxObj, RuntimeError};
-use ::std::cell::RefCell;
-use ::std::collections::HashMap;
-use ::std::rc::{Rc, Weak};
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::rc::{Rc, Weak};
 
 type Result<T> = ::std::result::Result<T, RuntimeError>;
 

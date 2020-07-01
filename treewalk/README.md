@@ -66,35 +66,6 @@ Entered loxrs REPL (press q<Enter> or Ctrl-c to quit)
 >
 ```
 
-## Layout of the source code
-
-```sh
-src
-├── analizer
-│   ├── mod.rs
-│   └── resolver.rs
-├── ast
-│   ├── expr.rs
-│   ├── mod.rs
-│   ├── pretty_printer.rs
-│   ├── stmt.rs
-│   └── visitor.rs
-├── lexer
-│   ├── mod.rs
-│   ├── parser.rs
-│   ├── scanner.rs
-│   └── token.rs
-├── lib.rs
-├── main.rs
-└── runtime
-    ├── env.rs
-    ├── interpreter.rs
-    ├── mod.rs
-    └── obj.rs
-
-4 directories, 17 files
-```
-
 ## Notes on the implementation
 
 ### Dependent crates

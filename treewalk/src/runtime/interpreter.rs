@@ -1,8 +1,8 @@
-use ::std::cell::RefCell;
-use ::std::collections::HashMap;
-use ::std::rc::Rc;
-use ::std::time::SystemTime;
+use std::cell::RefCell;
 use std::cmp::Ordering;
+use std::collections::HashMap;
+use std::rc::Rc;
+use std::time::SystemTime;
 
 use crate::ast::{expr::*, stmt::*, ExprVisitor, PrettyPrint, StmtVisitor};
 use crate::runtime::env::Env;
