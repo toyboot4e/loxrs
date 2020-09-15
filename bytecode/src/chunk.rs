@@ -1,4 +1,4 @@
-use std::io::prelude::*;
+use std::{io::prelude::*, mem::transmute};
 
 /// Operation code to the virtual machine
 #[derive(Debug, Clone, Copy)]
@@ -7,7 +7,7 @@ pub enum OpCode {
 
     /// Followed by a byte index
     OpConst8,
-    /// Followed by a two byte index
+    /// Followed by a two bytes index
     OpConst16,
 
     OpNegate,
@@ -23,31 +23,15 @@ impl Into<u8> for OpCode {
     }
 }
 
-/// An upcasted byte in `ChunkData`
-#[derive(Clone, Copy)]
-#[repr(C)]
-pub union ChunkByte {
-    byte: u8,
-    code: OpCode,
-}
-
 /// Constant value (it's f64 for now)
 pub type Value = f64;
 
-/// Chunk of instructions (`OpCode`s)
+/// Chunk of instructions ([`OpCode`]s)
 pub struct ChunkData {
     /// Upcated bytes
-    bytes: Vec<ChunkByte>,
+    bytes: Vec<u8>,
     /// Constant values stored
     consts: Vec<Value>,
-    // tracks: Vec<ChunkTrackItem>,
-}
-
-pub type ChunkCodeIndex = usize;
-pub type ChunkConstIndex = usize;
-
-pub struct ChunkTrackItem {
-    line: u32,
 }
 
 impl ChunkData {
@@ -55,36 +39,40 @@ impl ChunkData {
         Self {
             bytes: Vec::new(),
             consts: Vec::new(),
-            // tracks: Vec::new(),
         }
     }
+}
 
-    /// Upcasted bytes
-    pub fn bytes(&self) -> &[ChunkByte] {
+/// Accessors
+impl ChunkData {
+    #[inline(always)]
+    pub fn bytes(&self) -> &[u8] {
         &self.bytes
     }
 
+    #[inline(always)]
     pub fn consts(&mut self) -> &Vec<Value> {
         &self.consts
     }
 
-    pub fn store_const(&mut self, value: Value) {
+    #[inline(always)]
+    pub fn push_const(&mut self, value: Value) {
         self.consts.push(value)
     }
-}
 
-/// Read
-impl ChunkData {
-    pub fn read_u8(&self, offset: ChunkCodeIndex) -> u8 {
-        unsafe { self.bytes[offset].byte }
+    #[inline(always)]
+    pub fn read_opcode(&self, ix: usize) -> OpCode {
+        unsafe { transmute(self.bytes[ix]) }
     }
 
-    pub fn read_code(&self, offset: ChunkCodeIndex) -> OpCode {
-        unsafe { self.bytes[offset].code }
+    #[inline(always)]
+    pub fn read_u8(&self, ix: usize) -> u8 {
+        self.bytes[ix]
     }
 
-    pub fn read_u16(&self, offset: ChunkCodeIndex) -> u16 {
-        unsafe { ((self.bytes[offset].byte as u16) << 8) | (self.bytes[offset + 1].byte as u16) }
+    #[inline(always)]
+    pub fn read_u16(&self, ix: usize) -> u16 {
+        ((self.bytes[ix] as u16) << 8) | (self.bytes[ix + 1] as u16)
     }
 }
 
@@ -92,26 +80,33 @@ impl ChunkData {
 impl ChunkData {
     #[inline(always)]
     pub fn push_code(&mut self, code: OpCode) {
-        self.bytes.push(ChunkByte { code });
+        self.bytes.push(code as u8);
     }
 
     #[inline(always)]
-    pub fn push_idx_u8(&mut self, x: u8) {
-        self.bytes.push(ChunkByte {
-            code: OpCode::OpConst8,
-        });
-        self.bytes.push(ChunkByte { byte: x });
+    pub fn push_ix_u8(&mut self, x: u8) {
+        self.bytes.push(OpCode::OpConst8 as u8);
+        self.bytes.push(x);
     }
 
     #[inline(always)]
-    pub fn push_idx_u16(&mut self, x: u16) {
-        self.bytes.push(ChunkByte {
-            code: OpCode::OpConst16,
-        });
-        self.bytes.push(ChunkByte { byte: x as u8 });
-        self.bytes.push(ChunkByte {
-            byte: (x >> 8) as u8,
-        });
+    pub fn push_ix_u16(&mut self, x: u16) {
+        self.bytes.push(OpCode::OpConst16 as u8);
+        // higher 8 bits
+        self.bytes.push((x >> 8) as u8);
+        // lower 8 bits
+        self.bytes.push(x as u8);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::mem::size_of;
+
+    #[test]
+    fn test_memory_sizes() {
+        assert_eq!(1, size_of::<OpCode>());
     }
 }
 
@@ -135,27 +130,27 @@ impl DebugPrint for ChunkData {
         // TODO: consider using StdoutLock
         let mut iter = self.bytes.iter().enumerate();
         while let Some((offset, &byte)) = iter.next() {
-            let code: OpCode = unsafe { byte.code };
+            let code: OpCode = unsafe { transmute(byte) };
             match code {
                 OpConst8 => {
-                    let idx = self.read_u8(offset + 1);
+                    let ix = self.read_u8(offset + 1);
                     writeln!(
                         out,
                         "1 byte: idx =  {}, value = {:?}",
-                        idx,
-                        self.consts.get(idx as ChunkConstIndex)
+                        ix,
+                        self.consts.get(ix as usize)
                     )
                     .unwrap();
                     iter.next();
                 }
 
                 OpConst16 => {
-                    let idx = self.read_u16(offset + 1);
+                    let ix = self.read_u16(offset + 1);
                     writeln!(
                         out,
                         "2 bytes: idx = {}, value = {:?}",
-                        idx,
-                        self.consts.get(idx as ChunkConstIndex)
+                        ix,
+                        self.consts.get(ix as usize)
                     )
                     .unwrap();
 
@@ -170,32 +165,5 @@ impl DebugPrint for ChunkData {
         }
 
         out.flush().unwrap();
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::mem;
-
-    #[test]
-    fn test_memory_sizes() {
-        assert_eq!(1, mem::size_of::<OpCode>());
-    }
-
-    /// Not automatic test; check it with your eye
-    #[test]
-    fn debug_print_chunk_data() {
-        use OpCode::*;
-
-        let mut chunk = ChunkData::new();
-        chunk.push_code(OpReturn);
-        chunk.push_code(OpReturn);
-        chunk.push_idx_u8(42u8);
-        chunk.push_idx_u16(600u16);
-        chunk.consts.push(4124.45);
-        chunk.push_idx_u8(0);
-
-        chunk.debug_print("test chunk");
     }
 }
