@@ -61,8 +61,9 @@ impl<'a> LexState<'a> {
         while let Some(b) = self.peek_n(ix) {
             if !p(*b) {
                 break;
+            } else {
+                ix += 1;
             }
-            ix += 1;
         }
         ix - offset
     }
@@ -160,30 +161,33 @@ impl<'a> LexState<'a> {
         Err(LexError::UnterminatedComment { start: self.sp.lo })
     }
 
-    /// [0-9] [1-9]* ("." [0-9]+)?
+    /// [0-9]+ ("." [0-9]+)?
     ///
-    /// ```
+    /// ```none
     /// 130.456
     /// ^  ^  ^
     /// |  |  + decimal value
     /// |  + decimal point
     /// + whole value
     /// ```
-    pub fn num(&mut self) -> Result<Option<Token>> {
-        if !matches!(self.peek1(), Some(0..=9)) {
+    ///
+    /// Allows invalid format
+    pub fn num(&mut self) -> Result<Option<SpanToken>> {
+        let len_whole = self.peek_while(0, &mut |b| matches!(b, b'0'..=b'9'));
+
+        if len_whole == 0 {
             return Ok(None);
         }
 
-        let len_whole = 1 + self.peek_while(1, &mut |b| matches!(b, 1..=9));
-
-        if self.peek1() != Some(&b'.') {
-            return Ok(Some(Token::Num));
+        if self.peek_n(len_whole) != Some(&b'.') {
+            self.skip_n(len_whole);
+            return Ok(Some(SpanToken::new(Token::Num, self.consume_span())));
         }
 
-        let _len_decimal = self.peek_while(len_whole, &mut |b| matches!(b, 0..=9));
-        // TODO: check invalid number span
+        let len_decimal = self.peek_while(len_whole + 1, &mut |b| matches!(b, b'0'..=b'9'));
 
-        Ok(Some(Token::Num))
+        self.skip_n(len_whole + 1 + len_decimal);
+        Ok(Some(SpanToken::new(Token::Num, self.consume_span())))
     }
 
     pub fn str(&mut self) -> Result<Option<Token>> {
@@ -207,19 +211,14 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    /// Next [`SpanToken`]
     pub fn next_stk(&mut self) -> Result<SpanToken> {
+        // match rules on by one
+
         if let Some(stk) = self.state.ws()? {
             return Ok(stk);
         }
 
-        let tk = self.next_tk()?;
-        let sp = self.state.consume_span();
-
-        Ok(SpanToken::new(tk, sp))
-    }
-
-    fn next_tk(&mut self) -> Result<Token> {
-        // match on by one
         if let Some(tk) = self.state.num()? {
             return Ok(tk);
         }
@@ -228,6 +227,13 @@ impl<'a> Lexer<'a> {
         //     return Ok(tk);
         // }
 
+        let tk = self.next_tk()?;
+        let sp = self.state.consume_span();
+
+        Ok(SpanToken::new(tk, sp))
+    }
+
+    fn next_tk(&mut self) -> Result<Token> {
         let c = match self.state.next() {
             None => return Ok(Token::Eof),
             Some(c) => c,
@@ -358,12 +364,14 @@ mod tests {
 
     #[test]
     fn number() -> Result<()> {
-        let src = " 3.14 ";
+        let src = "3.14 * 0.25";
         let tks = self::run_lexer(src)?;
         let expected = &[
-            SpanToken::new(Token::Ws, [0, 1]),
-            SpanToken::new(Token::Num, [1, 5]),
-            SpanToken::new(Token::Ws, [5, 6]),
+            SpanToken::new(Token::Num, [0, 4]),
+            SpanToken::new(Token::Ws, [4, 5]),
+            SpanToken::new(Token::Star, [5, 6]),
+            SpanToken::new(Token::Ws, [6, 7]),
+            SpanToken::new(Token::Num, [7, 11]),
         ];
         assert_eq!(tks, expected, "\nsrc: {}", src);
         Ok(())
