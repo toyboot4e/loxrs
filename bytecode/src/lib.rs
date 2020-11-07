@@ -2,16 +2,25 @@
 
 pub mod chunk;
 pub mod compiler;
+pub mod parser;
 pub mod vm;
 
-use std::{
-    fs,
-    io::{self, prelude::*, BufWriter},
-    path::Path,
+#[macro_use]
+extern crate anyhow;
+
+#[macro_use]
+extern crate log;
+
+use {
+    anyhow::{Context, Error, Result},
+    std::{
+        fs,
+        io::{self, prelude::*, BufWriter},
+        path::Path,
+    },
 };
 
 use crate::vm::{Vm, VmError};
-use anyhow::{anyhow, Context, Error, Result};
 
 pub fn interpret(vm: &mut Vm, src: &str) -> Result<()> {
     // let x = compiler::compile(src);

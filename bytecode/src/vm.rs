@@ -1,6 +1,4 @@
-use ::std::ops;
-
-use ::anyhow::*;
+use {anyhow::*, std::ops};
 
 use crate::chunk::*;
 
@@ -11,6 +9,7 @@ pub enum VmError {
 }
 
 /// Loxrs virtual machine
+#[derive(Debug)]
 pub struct Vm {
     chunk: ChunkData,
     ix: usize,
@@ -94,6 +93,7 @@ impl Vm {
                     let v = -self.stack.pop().expect("error when interpretting OnNegate");
                     self.stack.push(v);
                 }
+
                 OpAdd => {
                     self.binary_op(ops::Add::add);
                 }
@@ -112,6 +112,7 @@ impl Vm {
         Ok(())
     }
 
+    /// Pushes binary operator to the stack
     #[inline]
     fn binary_op(&mut self, oper: impl Fn(Value, Value) -> Value) {
         let b = self.stack.pop().expect("binary_op b");

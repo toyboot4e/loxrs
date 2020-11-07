@@ -4,8 +4,3 @@ pub enum CompileError {
     X,
     //
 }
-
-pub fn compile(s: &str) {
-    //
-}
-

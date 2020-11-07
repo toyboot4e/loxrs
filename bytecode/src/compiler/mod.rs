@@ -1,3 +1,5 @@
-pub mod compiler;
-pub mod scanner;
-pub mod token;
+mod compiler;
+
+pub fn compile(s: &str) {
+    //
+}

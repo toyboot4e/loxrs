@@ -1,7 +1,7 @@
 use std::{io::prelude::*, mem::transmute};
 
 /// Operation code to the virtual machine
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Ord, PartialOrd)]
 pub enum OpCode {
     OpReturn,
 
@@ -27,6 +27,7 @@ impl Into<u8> for OpCode {
 pub type Value = f64;
 
 /// Chunk of instructions ([`OpCode`]s)
+#[derive(Debug, Clone)]
 pub struct ChunkData {
     /// Upcated bytes
     bytes: Vec<u8>,
