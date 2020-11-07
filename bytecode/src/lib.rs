@@ -2,7 +2,7 @@
 
 pub mod chunk;
 pub mod compiler;
-pub mod parser;
+pub mod parse;
 pub mod vm;
 
 #[macro_use]
