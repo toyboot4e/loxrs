@@ -23,6 +23,8 @@ pub enum LexError {
         found: SpanToken,
         expected: Vec<Token>,
     },
+    #[error("unexpected byte: {pos:?},{byte}")]
+    UnexpectedByte { pos: BytePos, byte: u8 },
 }
 
 /// Inner state for implementing [`Lexer`]
@@ -51,6 +53,18 @@ impl<'a> LexState<'a> {
         let next = self.peek1()?.clone();
         self.sp.hi.0 += 1;
         Some(next)
+    }
+
+    /// Returns the number of bytes that matches to the predicate
+    pub fn peek_while(&mut self, offset: usize, p: &mut impl FnMut(u8) -> bool) -> usize {
+        let mut ix = offset;
+        while let Some(b) = self.peek_n(ix) {
+            if !p(*b) {
+                break;
+            }
+            ix += 1;
+        }
+        ix - offset
     }
 
     pub fn skip_n(&mut self, n: usize) {
@@ -145,6 +159,40 @@ impl<'a> LexState<'a> {
 
         Err(LexError::UnterminatedComment { start: self.sp.lo })
     }
+
+    /// [0-9] [1-9]* ("." [0-9]+)?
+    ///
+    /// ```
+    /// 130.456
+    /// ^  ^  ^
+    /// |  |  + decimal value
+    /// |  + decimal point
+    /// + whole value
+    /// ```
+    pub fn num(&mut self) -> Result<Option<Token>> {
+        if !matches!(self.peek1(), Some(0..=9)) {
+            return Ok(None);
+        }
+
+        let len_whole = 1 + self.peek_while(1, &mut |b| matches!(b, 1..=9));
+
+        if self.peek1() != Some(&b'.') {
+            return Ok(Some(Token::Num));
+        }
+
+        let _len_decimal = self.peek_while(len_whole, &mut |b| matches!(b, 0..=9));
+        // TODO: check invalid number span
+
+        Ok(Some(Token::Num))
+    }
+
+    pub fn str(&mut self) -> Result<Option<Token>> {
+        unimplemented!("str");
+    }
+
+    pub fn ident(&mut self) -> Result<Option<Token>> {
+        unimplemented!("ident");
+    }
 }
 
 /// A tokenizer of `Iterator<Item = char>`
@@ -171,6 +219,15 @@ impl<'a> Lexer<'a> {
     }
 
     fn next_tk(&mut self) -> Result<Token> {
+        // match on by one
+        if let Some(tk) = self.state.num()? {
+            return Ok(tk);
+        }
+
+        // if let Some(tk) = self.state.ident()? {
+        //     return Ok(tk);
+        // }
+
         let c = match self.state.next() {
             None => return Ok(Token::Eof),
             Some(c) => c,
@@ -195,11 +252,10 @@ impl<'a> Lexer<'a> {
             b'>' => self.one_two(Token::Gt, b'=', Token::Ge),
 
             b => {
-                unimplemented!("byte: {}", b)
-                // return Err(ScanError::UnexpectedCharacter {
-                //     found: c,
-                //     at: self.state.pos(),
-                // })
+                return Err(LexError::UnexpectedByte {
+                    pos: self.state.lo(),
+                    byte: b,
+                });
             }
         })
     }
@@ -254,19 +310,15 @@ mod tests {
     #[test]
     fn spans() -> Result<()> {
         let src = ":  , ;";
-
         let tks = self::run_lexer(src)?;
-
-        let expected = vec![
+        let expected = &[
             SpanToken::new(Token::Colon, [0, 1]),
             SpanToken::new(Token::Ws, [1, 3]),
             SpanToken::new(Token::Comma, [3, 4]),
             SpanToken::new(Token::Ws, [4, 5]),
             SpanToken::new(Token::Semicolon, [5, 6]),
         ];
-
         assert_eq!(tks, expected, "\nsrc: {}", src);
-
         Ok(())
     }
 
@@ -302,5 +354,18 @@ mod tests {
                 Token::BangEq,
             ],
         )
+    }
+
+    #[test]
+    fn number() -> Result<()> {
+        let src = " 3.14 ";
+        let tks = self::run_lexer(src)?;
+        let expected = &[
+            SpanToken::new(Token::Ws, [0, 1]),
+            SpanToken::new(Token::Num, [1, 5]),
+            SpanToken::new(Token::Ws, [5, 6]),
+        ];
+        assert_eq!(tks, expected, "\nsrc: {}", src);
+        Ok(())
     }
 }
