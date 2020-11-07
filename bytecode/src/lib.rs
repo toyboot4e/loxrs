@@ -1,6 +1,5 @@
 //! Loxrs bytecode interpreter
 
-pub mod chunk;
 pub mod compiler;
 pub mod parse;
 pub mod vm;
@@ -38,7 +37,6 @@ pub fn run_repl() -> Result<()> {
     println!("loxrs REPL (bytecode) [press q<Enter> or Ctrl-c to quit]");
     let prompt_str = "> ";
 
-    // setting up I/O
     let out = io::stdout();
     let mut out = BufWriter::new(out.lock());
 
@@ -61,9 +59,7 @@ pub fn run_repl() -> Result<()> {
             }
             line => match self::interpret(&mut vm, line) {
                 Err(why) => eprintln!("Error: {}", why),
-                Ok(()) => {
-                    println!("run without error");
-                }
+                Ok(()) => {}
             },
         }
 

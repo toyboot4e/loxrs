@@ -1,6 +1,8 @@
+pub mod chunk;
+
 use {anyhow::*, std::ops};
 
-use crate::chunk::*;
+use self::chunk::*;
 
 #[derive(Debug)]
 pub enum VmError {
@@ -124,7 +126,7 @@ impl Vm {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::chunk::OpCode::*;
+    use crate::vm::chunk::OpCode::*;
 
     /// Tests `-((64.0 - 32.0) / 16.0)` results in `2.0`
     #[test]
