@@ -20,7 +20,7 @@ impl Default for ByteSpan {
 
 impl fmt::Display for ByteSpan {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "[{},{})", self.lo.0, self.hi.0)?;
+        write!(f, "{}..{}", self.lo.0, self.hi.0)?;
         Ok(())
     }
 }
