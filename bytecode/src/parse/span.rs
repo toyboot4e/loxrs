@@ -35,6 +35,10 @@ impl ByteSpan {
     pub fn new(lo: BytePos, hi: BytePos) -> Self {
         Self { lo, hi }
     }
+
+    pub fn len(&self) -> usize {
+        self.hi.0 - self.lo.0
+    }
 }
 
 /// Human friendly source position representation

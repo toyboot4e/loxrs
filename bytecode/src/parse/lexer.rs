@@ -50,7 +50,7 @@ impl<'a> LexState<'a> {
     }
 
     pub fn next(&mut self) -> Option<u8> {
-        let next = self.peek1()?.clone();
+        let next = self.peek0()?.clone();
         self.sp.hi.0 += 1;
         Some(next)
     }
@@ -68,6 +68,7 @@ impl<'a> LexState<'a> {
         ix - offset
     }
 
+    /// * `n`: the number of bytes to skip
     pub fn skip_n(&mut self, n: usize) {
         self.sp.hi.0 += n;
     }
@@ -81,23 +82,23 @@ impl<'a> LexState<'a> {
         }
     }
 
-    pub fn peek1(&mut self) -> Option<u8> {
+    pub fn peek0(&mut self) -> Option<u8> {
         self.peek_n(0)
     }
 
-    pub fn peek2(&mut self) -> Option<u8> {
+    pub fn peek1(&mut self) -> Option<u8> {
         self.peek_n(1)
     }
 
-    pub fn consume_span(&mut self) -> ByteSpan {
+    pub fn consume_skipped(&mut self) -> ByteSpan {
         let sp = self.sp;
         self.sp.lo = self.sp.hi;
         sp
     }
 
-    pub fn consume_peek(&mut self, len: usize) -> ByteSpan {
+    pub fn consume_skipping(&mut self, len: usize) -> ByteSpan {
         self.skip_n(len);
-        self.consume_span()
+        self.consume_skipped()
     }
 }
 
@@ -107,13 +108,17 @@ impl<'a> LexState<'a> {
     pub fn ws(&mut self) -> Result<Option<SpanToken>> {
         let prev_hi = self.sp.hi;
 
-        while let Some(c) = self.peek1() {
+        fn is_ws(b: u8) -> bool {
+            matches!(b, b' ' | b'\r' | b'\t')
+        }
+
+        while let Some(c) = self.peek0() {
             match c {
-                b' ' | b'\r' | b'\t' => {
+                b if is_ws(b) => {
                     self.skip_n(1);
                 }
 
-                b'/' => match self.peek2() {
+                b'/' => match self.peek1() {
                     Some(c) if c == b'/' => {
                         return Ok(Some(self.line_comment()));
                     }
@@ -129,11 +134,11 @@ impl<'a> LexState<'a> {
             };
         }
 
-        Ok(if self.sp.hi != prev_hi {
-            Some(SpanToken::new(Token::Ws, self.consume_span()))
+        if self.sp.hi != prev_hi {
+            Ok(Some(SpanToken::new(Token::Ws, self.consume_skipped())))
         } else {
-            None
-        })
+            Ok(None)
+        }
     }
 
     fn line_comment(&mut self) -> SpanToken {
@@ -145,7 +150,7 @@ impl<'a> LexState<'a> {
             }
         }
 
-        SpanToken::new(Token::LineComment, self.consume_span())
+        SpanToken::new(Token::LineComment, self.consume_skipped())
     }
 
     fn range_comment(&mut self) -> Result<SpanToken> {
@@ -153,10 +158,10 @@ impl<'a> LexState<'a> {
 
         while let Some(c) = self.next() {
             match c {
-                b'*' if matches!(self.peek1(), Some(b'/')) => {
-                    return Ok(SpanToken::new(Token::RangeComment, self.consume_span()));
+                b'*' if matches!(self.peek0(), Some(b'/')) => {
+                    return Ok(SpanToken::new(Token::RangeComment, self.consume_skipped()));
                 }
-                b'/' if matches!(self.peek1(), Some(b'*')) => {
+                b'/' if matches!(self.peek0(), Some(b'*')) => {
                     self.range_comment()?;
                 }
                 _ => {}
@@ -186,18 +191,18 @@ impl<'a> LexState<'a> {
 
         if self.peek_n(len_whole) != Some(b'.') {
             self.skip_n(len_whole);
-            return Ok(Some(SpanToken::new(Token::Num, self.consume_span())));
+            return Ok(Some(SpanToken::new(Token::Num, self.consume_skipped())));
         }
 
         let len_decimal = self.peek_while(len_whole + 1, &mut |b| matches!(b, b'0'..=b'9'));
 
         self.skip_n(len_whole + 1 + len_decimal);
-        Ok(Some(SpanToken::new(Token::Num, self.consume_span())))
+        Ok(Some(SpanToken::new(Token::Num, self.consume_skipped())))
     }
 
     pub fn str(&mut self) -> Result<Option<SpanToken>> {
         // "
-        if self.peek1() != Some(b'"') {
+        if self.peek0() != Some(b'"') {
             return Ok(None);
         }
 
@@ -207,7 +212,7 @@ impl<'a> LexState<'a> {
         fn try_peek_n(me: &mut LexState, offset: usize) -> Result<u8> {
             me.peek_n(offset)
                 .ok_or_else(|| LexError::UnterminatedString {
-                    start: me.consume_peek(offset).lo,
+                    start: me.consume_skipping(offset).lo,
                 })
         }
 
@@ -230,7 +235,7 @@ impl<'a> LexState<'a> {
                 // EoF
                 None => {
                     return Err(LexError::UnterminatedString {
-                        start: self.consume_peek(len_content).lo,
+                        start: self.consume_skipping(len_content).lo,
                     });
                 }
             }
@@ -239,60 +244,41 @@ impl<'a> LexState<'a> {
         self.skip_n(len_content);
         self.skip_n(1); // "
 
-        Ok(Some(SpanToken::new(Token::Str, self.consume_span())))
+        Ok(Some(SpanToken::new(Token::Str, self.consume_skipped())))
+    }
+
+    /// [a-zA-Z_][a-zA-Z0-9]+
+    pub fn kwd(&mut self) -> Option<SpanToken> {
+        fn is_in(x: u8, a: u8, b: u8) -> bool {
+            !(x < a || b < x)
+        }
+
+        fn is_word(b: u8) -> bool {
+            is_in(b, b'a', b'z') || is_in(b, b'A', b'Z') || b >= 1 >> 7
+        }
+
+        fn is_word_or_num(b: u8) -> bool {
+            is_word(b) || is_in(b, b'0', b'9')
+        }
+
+        if !is_word(self.peek0()?) {
+            return None;
+        }
+
+        let len = 1 + self.peek_while(1, &mut is_word_or_num);
+
+        self.skip_n(len);
+        let s = &self.src[self.sp.lo.0..self.sp.hi.0];
+
+        unimplemented!()
     }
 
     pub fn ident(&mut self) -> Result<Option<Token>> {
         unimplemented!("ident");
     }
-}
 
-/// A tokenizer of `Iterator<Item = char>`
-pub struct Lexer<'a> {
-    state: LexState<'a>,
-}
-
-impl<'a> Lexer<'a> {
-    pub fn new(src: &'a str) -> Self {
-        Self {
-            state: LexState::new(src),
-        }
-    }
-
-    /// Next [`SpanToken`]
-    pub fn next_stk(&mut self) -> Result<SpanToken> {
-        // match rules on by one
-
-        if let Some(stk) = self.state.ws()? {
-            return Ok(stk);
-        }
-
-        if let Some(tk) = self.state.num()? {
-            return Ok(tk);
-        }
-
-        if let Some(tk) = self.state.str()? {
-            return Ok(tk);
-        }
-
-        // if let Some(tk) = self.state.ident()? {
-        //     return Ok(tk);
-        // }
-
-        let tk = self.next_tk()?;
-        let sp = self.state.consume_span();
-
-        Ok(SpanToken::new(tk, sp))
-    }
-
-    fn next_tk(&mut self) -> Result<Token> {
-        // we're consuming the next byte!
-        let c = match self.state.next() {
-            None => return Ok(Token::Eof),
-            Some(c) => c,
-        };
-
-        Ok(match c {
+    pub fn symbol(&mut self) -> Option<SpanToken> {
+        let tk = match self.peek0()? {
             b'(' => Token::LParen,
             b')' => Token::RParen,
             b'{' => Token::LBrace,
@@ -310,24 +296,74 @@ impl<'a> Lexer<'a> {
             b'<' => self.one_two(Token::Lt, b'=', Token::Le),
             b'>' => self.one_two(Token::Gt, b'=', Token::Ge),
 
-            b => {
-                return Err(LexError::UnexpectedByte {
-                    pos: self.state.lo(),
-                    byte: b,
-                });
-            }
-        })
+            _b => return None,
+        };
+
+        self.skip_n(1);
+        Some(SpanToken::new(tk, self.consume_skipped()))
     }
 
-    fn one_two(&mut self, not_match: Token, expected: u8, if_match: Token) -> Token {
-        match self.state.peek1() {
-            None => not_match,
+    fn one_two(&mut self, default: Token, expected: u8, if_match: Token) -> Token {
+        match self.peek1() {
+            None => default,
             Some(n) if n == expected => {
-                self.state.next();
+                self.skip_n(1);
                 if_match
             }
-            _ => not_match,
+            _ => default,
         }
+    }
+}
+
+/// A tokenizer of `Iterator<Item = char>`
+pub struct Lexer<'a> {
+    state: LexState<'a>,
+}
+
+impl<'a> Lexer<'a> {
+    pub fn new(src: &'a str) -> Self {
+        Self {
+            state: LexState::new(src),
+        }
+    }
+
+    /// Next [`SpanToken`]
+    pub fn next_stk(&mut self) -> Result<SpanToken> {
+        if self.state.peek0().is_none() {
+            return Ok(SpanToken::new(
+                Token::Eof,
+                // the length is zero but it's ok
+                ByteSpan::new(self.state.lo(), self.state.lo()),
+            ));
+        }
+
+        // match rules on by one
+
+        if let Some(stk) = self.state.ws()? {
+            return Ok(stk);
+        }
+
+        if let Some(stk) = self.state.num()? {
+            return Ok(stk);
+        }
+
+        if let Some(stk) = self.state.str()? {
+            return Ok(stk);
+        }
+
+        // if let Some(tk) = self.state.kwd_or_ident()? {
+        //     return Ok(tk);
+        // }
+
+        if let Some(stk) = self.state.symbol() {
+            return Ok(stk);
+        }
+
+        let b = self.state.peek0().unwrap();
+        Err(LexError::UnexpectedByte {
+            pos: self.state.hi(),
+            byte: b,
+        })
     }
 }
 
@@ -361,7 +397,7 @@ mod tests {
             .map(|stk| stk.tk)
             .collect::<Vec<_>>();
 
-        assert_eq!(tks, expected);
+        assert_eq!(tks, expected, "\nsrc: {}", src);
 
         Ok(())
     }
