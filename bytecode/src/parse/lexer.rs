@@ -96,7 +96,7 @@ impl<'a> LexState<'a> {
         sp
     }
 
-    pub fn consume_skipping(&mut self, len: usize) -> ByteSpan {
+    pub fn consume_len(&mut self, len: usize) -> ByteSpan {
         self.skip_n(len);
         self.consume_skipped()
     }
@@ -212,7 +212,7 @@ impl<'a> LexState<'a> {
         fn try_peek_n(me: &mut LexState, offset: usize) -> Result<u8> {
             me.peek_n(offset)
                 .ok_or_else(|| LexError::UnterminatedString {
-                    start: me.consume_skipping(offset).lo,
+                    start: me.consume_len(offset).lo,
                 })
         }
 
@@ -235,7 +235,7 @@ impl<'a> LexState<'a> {
                 // EoF
                 None => {
                     return Err(LexError::UnterminatedString {
-                        start: self.consume_skipping(len_content).lo,
+                        start: self.consume_len(len_content).lo,
                     });
                 }
             }
@@ -247,14 +247,27 @@ impl<'a> LexState<'a> {
         Ok(Some(SpanToken::new(Token::Str, self.consume_skipped())))
     }
 
+    pub fn kwd_or_ident(&mut self) -> Option<SpanToken> {
+        let sp = self.word()?;
+        let word: &[u8] = &self.src[sp.lo.0..sp.hi.0];
+
+        let tk = match word[0] {
+            b'i' if matches!(word.get(1), Some(b'f')) => Token::If,
+            _ => Token::Ident,
+        };
+
+        Some(SpanToken::new(tk, sp))
+    }
+
     /// [a-zA-Z_][a-zA-Z0-9]+
-    pub fn kwd(&mut self) -> Option<SpanToken> {
+    fn word(&mut self) -> Option<ByteSpan> {
+        /// x `elem` [a, b]
         fn is_in(x: u8, a: u8, b: u8) -> bool {
             !(x < a || b < x)
         }
 
         fn is_word(b: u8) -> bool {
-            is_in(b, b'a', b'z') || is_in(b, b'A', b'Z') || b >= 1 >> 7
+            is_in(b, b'a', b'z') || is_in(b, b'A', b'Z') || b >= 0b11000000
         }
 
         fn is_word_or_num(b: u8) -> bool {
@@ -267,14 +280,7 @@ impl<'a> LexState<'a> {
 
         let len = 1 + self.peek_while(1, &mut is_word_or_num);
 
-        self.skip_n(len);
-        let s = &self.src[self.sp.lo.0..self.sp.hi.0];
-
-        unimplemented!()
-    }
-
-    pub fn ident(&mut self) -> Result<Option<Token>> {
-        unimplemented!("ident");
+        Some(self.consume_len(len))
     }
 
     pub fn symbol(&mut self) -> Option<SpanToken> {
@@ -351,14 +357,15 @@ impl<'a> Lexer<'a> {
             return Ok(stk);
         }
 
-        // if let Some(tk) = self.state.kwd_or_ident()? {
-        //     return Ok(tk);
-        // }
+        if let Some(stk) = self.state.kwd_or_ident() {
+            return Ok(stk);
+        }
 
         if let Some(stk) = self.state.symbol() {
             return Ok(stk);
         }
 
+        // FIXME: not unwarp
         let b = self.state.peek0().unwrap();
         Err(LexError::UnexpectedByte {
             pos: self.state.hi(),
