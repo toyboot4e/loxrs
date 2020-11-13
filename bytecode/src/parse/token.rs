@@ -55,22 +55,38 @@ pub enum Token {
 
     // ----------------------------------------
     // keywords
-    And,
-    Class,
-    Self_,
-    Else,
-    False,
-    Fn,
-    For,
+
+    // control flow
     If,
-    Nil,
-    Or,
-    Print,
-    Return,
-    Super,
-    True,
-    Var,
+    Else,
+    For,
     While,
+    Loop,
+
+    // logical
+    // And,
+    // Or,
+
+    // literals
+    True,
+    False,
+    Nil,
+
+    // keywords
+    // Class,
+    // Super,
+    /// self
+    SelfSmall,
+    /// Self
+    SelfCapital,
+
+    // statements
+    Return,
+    Var,
+    Fn,
+
+    // builtin
+    Print,
 
     /// End of input
     Eof,

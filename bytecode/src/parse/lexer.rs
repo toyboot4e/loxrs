@@ -245,9 +245,25 @@ impl<'a> LexState<'a> {
         let sp = self.word()?;
         let word: &[u8] = &self.src[sp.lo.0..sp.hi.0];
 
-        // DFA as a trie
+        // trie-like
         let tk = match word[0] {
-            b'i' if matches!(word.get(1), Some(b'f')) => Token::If,
+            // control flow
+            b'i' if word == b"if" => Token::If,
+            b'e' if word == b"else" => Token::Else,
+            b'f' if word == b"for" => Token::For,
+            b'w' if word == b"while" => Token::While,
+            b'l' if word == b"loop" => Token::Loop,
+            // literals
+            b't' if word == b"true" => Token::True,
+            b'f' if word == b"false" => Token::False,
+            b'n' if word == b"nil" => Token::Nil,
+            // keywords
+            b's' if word == b"self" => Token::SelfSmall,
+            b'S' if word == b"Self" => Token::SelfCapital,
+            // statements
+            b'r' if word == b"ret" => Token::Return,
+            // builtin function
+            b'p' if word == b"print" => Token::Print,
             _ => Token::Ident,
         };
 
@@ -261,19 +277,19 @@ impl<'a> LexState<'a> {
             !(x < a || b < x)
         }
 
-        fn is_word(b: u8) -> bool {
+        fn is_word_head(b: u8) -> bool {
             is_in(b, b'a', b'z') || is_in(b, b'A', b'Z') || b >= 0b11000000
         }
 
-        fn is_word_or_num(b: u8) -> bool {
-            is_word(b) || is_in(b, b'0', b'9')
+        fn is_word_part(b: u8) -> bool {
+            is_word_head(b) || is_in(b, b'0', b'9') || matches!(b, b'_')
         }
 
-        if !is_word(self.peek0()?) {
+        if !is_word_head(self.peek0()?) {
             return None;
         }
 
-        let len = 1 + self.peek_while(1, &mut is_word_or_num);
+        let len = 1 + self.peek_while(1, &mut is_word_part);
 
         Some(self.consume_len(len))
     }
@@ -479,5 +495,37 @@ mod tests {
         ];
         assert_eq!(tks, expected, "\nsrc: {}", src);
         Ok(())
+    }
+
+    #[test]
+    fn keywords() -> Result<()> {
+        self::match_tokens(
+            "my_ident if else for while loop true false nil self Self ret",
+            &[
+                Token::Ident,
+                Token::Ws,
+                Token::If,
+                Token::Ws,
+                Token::Else,
+                Token::Ws,
+                Token::For,
+                Token::Ws,
+                Token::While,
+                Token::Ws,
+                Token::Loop,
+                Token::Ws,
+                Token::True,
+                Token::Ws,
+                Token::False,
+                Token::Ws,
+                Token::Nil,
+                Token::Ws,
+                Token::SelfSmall,
+                Token::Ws,
+                Token::SelfCapital,
+                Token::Ws,
+                Token::Return,
+            ],
+        )
     }
 }
