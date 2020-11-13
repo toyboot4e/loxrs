@@ -1,4 +1,4 @@
-use loxrs::cli;
+use loxrs_treewalk::cli;
 
 fn main() -> cli::Result<()> {
     env_logger::init();

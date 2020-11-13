@@ -1,5 +1,5 @@
 [package]
-name = "loxrs"
+name = "loxrs_treewalk"
 version = "0.1.0"
 authors = ["toyboot4e <toyboot4e@gmail.com>"]
 edition = "2018"
