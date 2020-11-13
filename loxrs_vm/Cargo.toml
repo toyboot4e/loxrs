@@ -10,6 +10,8 @@ anyhow = "1.0.31"
 thiserror = "1.0.19"
 
 env_logger = "0.8.1"
+clap = "3.0.0-beta.2"
+termcolor = "1.1.0"
 
 [[bin]]
 name = "loxrs"
