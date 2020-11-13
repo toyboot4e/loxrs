@@ -219,25 +219,19 @@ impl<'a> LexState<'a> {
         // <content> "
         let mut len_content = 0;
         loop {
-            let b = try_peek_n(self, len_content)?;
-
-            match self.peek_n(len_content) {
+            match try_peek_n(self, len_content)? {
                 // escape
-                Some(b) if b == b'\\' => {
-                    //
+                b'\\' => {
+                    len_content += 1;
+                    try_peek_n(self, len_content)?;
+                    len_content += 1;
                 }
                 // terminated
-                Some(b) if b == b'"' => {
+                b'"' => {
                     break;
                 }
                 // normal byte
-                Some(_) => len_content += 1,
-                // EoF
-                None => {
-                    return Err(LexError::UnterminatedString {
-                        start: self.consume_len(len_content).lo,
-                    });
-                }
+                _ => len_content += 1,
             }
         }
 
@@ -251,6 +245,7 @@ impl<'a> LexState<'a> {
         let sp = self.word()?;
         let word: &[u8] = &self.src[sp.lo.0..sp.hi.0];
 
+        // DFA as a trie
         let tk = match word[0] {
             b'i' if matches!(word.get(1), Some(b'f')) => Token::If,
             _ => Token::Ident,
