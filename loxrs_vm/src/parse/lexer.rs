@@ -50,7 +50,7 @@ impl<'a> LexState<'a> {
     }
 
     pub fn next(&mut self) -> Option<u8> {
-        let next = self.peek0()?.clone();
+        let next = self.peek0()?;
         self.sp.hi.0 += 1;
         Some(next)
     }
@@ -262,8 +262,6 @@ impl<'a> LexState<'a> {
             b'S' if word == b"Self" => Token::SelfCapital,
             // statements
             b'r' if word == b"ret" => Token::Return,
-            // builtin function
-            b'p' if word == b"print" => Token::Print,
             _ => Token::Ident,
         };
 

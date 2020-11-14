@@ -2,7 +2,7 @@ use std::fmt;
 
 use crate::parse::span::{BytePos, ByteSpan, SrcPos, SrcSpan};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Token {
     // ----------------------------------------
     // wihtespace
@@ -85,9 +85,6 @@ pub enum Token {
     Var,
     Fn,
 
-    // builtin
-    Print,
-
     /// End of input
     Eof,
 }
@@ -102,6 +99,10 @@ pub struct SpanToken {
 impl SpanToken {
     pub fn new(tk: Token, sp: impl Into<ByteSpan>) -> Self {
         Self { tk, sp: sp.into() }
+    }
+
+    pub fn slice<'a>(&self, src: &'a str) -> &'a str {
+        &src[self.sp.lo.0..self.sp.hi.0]
     }
 }
 
