@@ -23,7 +23,7 @@ pub enum LexError {
         found: SpanToken,
         expected: Vec<Token>,
     },
-    #[error("unexpected byte: {pos:?},{byte}")]
+    #[error("unexpected byte: {pos:?}: {byte}")]
     UnexpectedByte { pos: BytePos, byte: u8 },
 }
 
@@ -109,7 +109,7 @@ impl<'a> LexState<'a> {
         let prev_hi = self.sp.hi;
 
         fn is_ws(b: u8) -> bool {
-            matches!(b, b' ' | b'\r' | b'\t')
+            matches!(b, b' ' | b'\n' | b'\r' | b'\t')
         }
 
         while let Some(c) = self.peek0() {
