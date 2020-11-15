@@ -7,7 +7,7 @@ use crate::lex::{
 
 pub type Result<T> = std::result::Result<T, LexError>;
 
-/// Byte-based error report
+/// Byte-based error report, not for end users
 #[derive(Debug, Error)]
 pub enum LexError {
     #[error("unterminated string")]
@@ -16,13 +16,6 @@ pub enum LexError {
     UnterminatedComment { start: BytePos },
     #[error("unexpected EoF")]
     UnexpectedEof(),
-    #[error("unexpected character")]
-    UnexpectedCharacter { found: char, at: BytePos },
-    #[error("unexpected token: {found:?}, expected: {expected:?}")]
-    UnexpectedToken {
-        found: SpanToken,
-        expected: Vec<Token>,
-    },
     #[error("unexpected byte: {pos:?}: {byte}")]
     UnexpectedByte { pos: BytePos, byte: u8 },
 }
