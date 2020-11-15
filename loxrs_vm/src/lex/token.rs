@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::parse::span::{BytePos, ByteSpan, SrcPos, SrcSpan};
+use crate::lex::span::{BytePos, ByteSpan, SrcPos, SrcSpan};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Token {

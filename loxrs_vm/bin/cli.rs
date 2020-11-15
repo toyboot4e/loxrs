@@ -2,12 +2,12 @@
 
 use {
     clap::Clap,
-    loxrs_vm::parse::lexer::Lexer,
+    loxrs_vm::lex::lexer::Lexer,
     std::io::{self, prelude::*},
     termcolor::{BufferWriter, Color, ColorChoice, ColorSpec, WriteColor},
 };
 
-use loxrs_vm::parse::token::Token;
+use loxrs_vm::lex::token::Token;
 
 pub type Result<T> = anyhow::Result<T>;
 

@@ -1,7 +1,7 @@
 //! Loxrs bytecode interpreter
 
 pub mod compiler;
-pub mod parse;
+pub mod lex;
 pub mod vm;
 
 #[macro_use]

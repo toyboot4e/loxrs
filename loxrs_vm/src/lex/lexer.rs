@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::parse::{
+use crate::lex::{
     span::{BytePos, ByteSpan},
     token::{SpanToken, Token},
 };
@@ -387,7 +387,7 @@ impl<'a> Lexer<'a> {
 // cargo test -- --test-threads 1 --nocapture
 #[cfg(test)]
 mod tests {
-    use crate::parse::{
+    use crate::lex::{
         lexer::{Lexer, Result},
         token::{SpanToken, Token},
     };
